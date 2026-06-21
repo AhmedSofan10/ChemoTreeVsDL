@@ -26,8 +26,13 @@ parser.add_argument("--freeze", action="store_true", help="Freeze all except for
 parser.add_argument("--config_path", default=None)
 parser.add_argument("--split_seed", default=None)
 parser.add_argument("--fast", action="store_true", help="Disable determinism for faster computation")
+parser.add_argument("--skip-export", action="store_true", help="PrimeNet: reuse exported .pt tensors")
+parser.add_argument("--skip-pretrain", action="store_true", help="PrimeNet: reuse primenet_pretrain.h5 checkpoint")
                     
 args = parser.parse_args()
+
+if args.model_type == "primenet" and args.grid != "none":
+    parser.error("PrimeNet supports --grid none only in this release.")
 
 # GRID SEARCH
 envmg = EnvManager(args)

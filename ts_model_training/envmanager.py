@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 from ts_model_training.logger import Logger
 from ts_model_training.utils import set_all_seeds, set_all_paths, load_fold_file
-from config.constants import num_folds, num_inner_folds
+from config.constants import PROJECT_ROOT, num_folds, num_inner_folds
 from sklearn.model_selection import StratifiedGroupKFold
 
 from ts_model_training.dataset import TimeSeriesDataset
@@ -24,7 +24,7 @@ class EnvManager:
         # set env config
         self.args = args
         self.nfolds = num_folds
-        self.config_path = args.config_path or "ts_model_training/ts_config_params.yaml"
+        self.config_path = args.config_path or str(PROJECT_ROOT / "config" / "ts_config_params.yaml")
 
         # load config and initialise environment
         self.set_device()
@@ -286,6 +286,10 @@ class EnvManager:
         torch.cuda.empty_cache()     
         
     def train_full(self):
+
+        if self.args.model_type == "primenet":
+            self._train_primenet()
+            return
         
         # EXTRACT DATA if not available
         extractor = ExtractorTrain(self.args) if self.args.train_mode != "pretrain" else ExtractorPretrain(self.args)
@@ -358,6 +362,39 @@ class EnvManager:
                 f"Invalid value for --grid: {self.args.grid}. "
                 "Expected one of: 'nested', 'simple', 'none', 'best', 'best_epochs'"
             )
+
+    def _train_primenet(self):
+        """Pretrain + finetune vendored TimeBERT (grid=none only)."""
+        if self.args.grid != "none":
+            raise ValueError(
+                f"PrimeNet supports --grid none only (got {self.args.grid!r})."
+            )
+        self.set_model_params(mode="default")
+        params = dict(self.args.model_params)
+        if getattr(self.args, "fast", False):
+            params.update(
+                pretrain_niters=25,
+                finetune_niters=25,
+                max_obs=256,
+                batch_size=16,
+                max_pretrain_samples=512,
+                max_finetune_samples=800,
+                patience=8,
+                finetune_patience=8,
+            )
+        from ts_model_training.primenet.train_loop import train_fold
+
+        out = Path(self.args.paths["output_path"])
+        metrics = train_fold(
+            self.args.cohort,
+            self.args.fold,
+            params,
+            out,
+            skip_export=getattr(self.args, "skip_export", False),
+            skip_pretrain=getattr(self.args, "skip_pretrain", False),
+        )
+        self.args.logger.write(f"PrimeNet test metrics: {metrics}")
+        print(f"\nDone. Results: {out}")
 
             
     def train_best(self): # after CV
