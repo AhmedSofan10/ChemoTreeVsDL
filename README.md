@@ -85,4 +85,4 @@ python colab_primenet_train.py --fold 0 --fast
 python scripts/summarize_folds.py --prefix colab_primenet --model primenet
 ```
 
-Or open `notebooks/primenet_mimic_iv_colab.ipynb` in Colab (branch `feature/primenet-vendored`).
+Or open `notebooks/primenet_mimic_iv_colab.ipynb` in Colab (branch `primenet`).
