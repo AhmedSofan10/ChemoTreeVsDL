@@ -4,6 +4,9 @@ import yaml
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PRIMENET_VENDOR_ROOT = PROJECT_ROOT / "third_party" / "PrimeNet"
+PRIMENET_DATA_DIR = PROJECT_ROOT / "MIMIC_IV" / "saved_data" / "primenet"
+RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
 MIMIC_DIR = '/home/jovyan/data_common/mimiciv/'
 MIMIC_LABS_DIR = MIMIC_DIR +'hosp/labevents.csv.gz'
 UKER_DIR = '/home/jovyan/data_common/ped-data.db'
