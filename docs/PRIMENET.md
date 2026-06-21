@@ -7,6 +7,8 @@ PrimeNet ([Roy Chowdhury et al., AAAI 2023](https://github.com/ranakroychowdhury
 - `third_party/PrimeNet/` — vendored upstream TimeBERT (pinned commit in `third_party/PrimeNet/VENDOR.md`)
 - `ts_model_training/primenet/` — export, train loop, metrics (ChemoTree data paths)
 - `colab_primenet_train.py` — Google Colab entry point
+- `notebooks/primenet_mimic_iv_colab.ipynb` — Colab notebook
+- `scripts/prepare_mimic_from_raw.py` — build `MIMIC_IV/saved_data/` from `data/raw/`
 
 ## Train (local)
 

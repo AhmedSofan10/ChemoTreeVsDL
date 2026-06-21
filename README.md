@@ -13,7 +13,9 @@ This repository provides a reproducible pipeline to:
 
 **Temporal models**  
 - Regular time series: GRU, LSTM, Temporal Convolutional Network (TCN), SAnD  
-- Irregular time series: GRU-D, InterpNet, STraTS  
+- Irregular time series: GRU-D, InterpNet, STraTS, **PrimeNet** (vendored TimeBERT)
+
+See [`docs/PRIMENET.md`](docs/PRIMENET.md) and [`notebooks/primenet_mimic_iv_colab.ipynb`](notebooks/primenet_mimic_iv_colab.ipynb) for MIMIC-IV NF training on Google Colab.
 
 ## Cohorts
 
@@ -73,3 +75,14 @@ To run temporal deep models on already prepared inputs:
 ```bash
 bash train_ts_models.sh
 ```
+
+#### PrimeNet (MIMIC-IV neutropenic fever, Colab)
+
+```bash
+pip install -r requirements-colab.txt
+# Upload cohort + labs CSVs to data/raw/, then:
+python colab_primenet_train.py --fold 0 --fast
+python scripts/summarize_folds.py --prefix colab_primenet --model primenet
+```
+
+Or open `notebooks/primenet_mimic_iv_colab.ipynb` in Colab (branch `feature/primenet-vendored`).
