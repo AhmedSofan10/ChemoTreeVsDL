@@ -16,7 +16,8 @@ env/
 outputs/
 MIMIC_IV/saved_data/
 UKEr/saved_data/
-data/raw/
+data/raw/*
+!data/raw/.gitkeep
 *.pt
 *.pth
 *.h5

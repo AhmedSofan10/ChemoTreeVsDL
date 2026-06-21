@@ -34,12 +34,24 @@ def _gzip_csv(src: Path, dst: Path) -> None:
 
 
 def prepare_cohort(cohort: str) -> None:
-    _gzip_csv(RAW_DATA_DIR / f"{cohort}.csv", SAVED_DATA / "cohorts" / f"{cohort}.csv.gz")
+    src = RAW_DATA_DIR / f"{cohort}.csv"
+    if not src.is_file():
+        raise FileNotFoundError(
+            f"Missing {src}\n"
+            f"Upload your cohort CSV to data/raw/ (see notebooks/primenet_mimic_iv_colab.ipynb)."
+        )
+    _gzip_csv(src, SAVED_DATA / "cohorts" / f"{cohort}.csv.gz")
 
 
 def prepare_features(cohort: str, days: int) -> None:
     name = f"{cohort}_admissions_labs_{days}_days"
-    _gzip_csv(RAW_DATA_DIR / f"{name}.csv", SAVED_DATA / "features" / f"{name}.csv.gz")
+    src = RAW_DATA_DIR / f"{name}.csv"
+    if not src.is_file():
+        raise FileNotFoundError(
+            f"Missing {src}\n"
+            f"Upload your labs CSV to data/raw/ (see notebooks/primenet_mimic_iv_colab.ipynb)."
+        )
+    _gzip_csv(src, SAVED_DATA / "features" / f"{name}.csv.gz")
 
 
 def build_to_ts(cohort: str, days: int) -> None:
