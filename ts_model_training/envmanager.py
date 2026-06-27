@@ -150,12 +150,111 @@ class EnvManager:
         elif self.args.model_type == "strats" and self.args.pretrain:
             self.args.train_mode = "pretrain"
 
+        elif self.args.model_type == "primenet" and self.args.load_ckpt_path is not None:
+            self._resolve_primenet_finetune_ckpt()
+
+        elif self.args.model_type == "primenet" and self.args.pretrain:
+            self.args.train_mode = "pretrain"
+
+        elif self.args.model_type == "primenet":
+            self.args.train_mode = "standard"
+
         else:
             # models different than strats can only be run in standard mode
             self.args.train_mode = "standard"
 
         if self.args.prefix is None:
             self.args.prefix = datetime.now().strftime("%d%m%y")
+
+    def _resolve_primenet_finetune_ckpt(self):
+        base = Path(self.args.load_ckpt_path)
+        self.args.pt_var_path = base / "primenet_saved_variables.pkl"
+        ckpt = base / "checkpoint_best.bin"
+        legacy = base / "primenet_pretrain.h5"
+        if ckpt.is_file():
+            self.args.pt_dict_path = ckpt
+        elif legacy.is_file():
+            self.args.pt_dict_path = legacy
+        else:
+            raise FileNotFoundError(
+                f"PrimeNet checkpoint not found under {base} "
+                "(expected checkpoint_best.bin or primenet_pretrain.h5)"
+            )
+        try:
+            with open(self.args.pt_var_path, "rb") as f:
+                pickle.load(f)
+            with open(self.args.pt_dict_path, "rb") as f:
+                f.read(1)
+        except Exception as e:
+            raise RuntimeError(f"Error loading PrimeNet checkpoint files: {e}")
+        self.args.finetune = True
+        self.args.train_mode = "finetune"
+
+    def _apply_primenet_fast_overrides(self):
+        if not getattr(self.args, "fast", False):
+            return
+        fast = {
+            "pretrain_niters": 25,
+            "finetune_niters": 25,
+            "max_obs": 256,
+            "batch_size": 16,
+            "max_pretrain_samples": 512,
+            "max_finetune_samples": 800,
+            "patience": 8,
+            "finetune_patience": 8,
+        }
+        self.args.model_params.update(fast)
+        for key, value in fast.items():
+            setattr(self.args, key, value)
+
+    def _train_primenet_pipeline(self):
+        """Pretrain + finetune via unified Preprocessor → Trainer path."""
+        if self.args.grid != "none":
+            raise ValueError(
+                f"PrimeNet supports --grid none only (got {self.args.grid!r})."
+            )
+        self.set_model_params(mode="default")
+        self._apply_primenet_fast_overrides()
+        self.set_ids(mode="default")
+
+        out = Path(self.args.paths["output_path"])
+        pre_ckpt = out / "checkpoint_best.bin"
+        legacy_ckpt = out / "primenet_pretrain.h5"
+        mp = self.args.model_params
+
+        run_pretrain = self.args.train_mode in ("pretrain", "standard")
+        run_finetune = self.args.train_mode in ("finetune", "standard")
+
+        if run_pretrain and not getattr(self.args, "skip_pretrain", False):
+            self.args.train_mode = "pretrain"
+            self.args.max_epochs = int(mp.get("pretrain_niters", 2000))
+            self.args.patience = int(mp.get("patience", self.args.patience))
+            self.train()
+
+        if run_finetune:
+            if not (
+                self.args.train_mode == "finetune"
+                and getattr(self.args, "load_ckpt_path", None)
+            ):
+                self.args.pt_var_path = out / "primenet_saved_variables.pkl"
+                if pre_ckpt.is_file():
+                    self.args.pt_dict_path = pre_ckpt
+                elif legacy_ckpt.is_file():
+                    self.args.pt_dict_path = legacy_ckpt
+                elif getattr(self.args, "skip_pretrain", False):
+                    raise FileNotFoundError(
+                        f"Missing pretrain checkpoint in {out} "
+                        "(checkpoint_best.bin or primenet_pretrain.h5)"
+                    )
+            self.args.train_mode = "finetune"
+            self.args.max_epochs = int(mp.get("finetune_niters", 2000))
+            self.args.patience = int(
+                mp.get("finetune_patience", mp.get("patience", self.args.patience))
+            )
+            self.train()
+
+        self.args.logger.write(f"PrimeNet pipeline done. Results: {out}")
+        print(f"\nDone. Results: {out}")
         
     def set_device(self):
         self.args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -288,7 +387,7 @@ class EnvManager:
     def train_full(self):
 
         if self.args.model_type == "primenet":
-            self._train_primenet()
+            self._train_primenet_pipeline()
             return
         
         # EXTRACT DATA if not available
@@ -362,39 +461,6 @@ class EnvManager:
                 f"Invalid value for --grid: {self.args.grid}. "
                 "Expected one of: 'nested', 'simple', 'none', 'best', 'best_epochs'"
             )
-
-    def _train_primenet(self):
-        """Pretrain + finetune vendored TimeBERT (grid=none only)."""
-        if self.args.grid != "none":
-            raise ValueError(
-                f"PrimeNet supports --grid none only (got {self.args.grid!r})."
-            )
-        self.set_model_params(mode="default")
-        params = dict(self.args.model_params)
-        if getattr(self.args, "fast", False):
-            params.update(
-                pretrain_niters=25,
-                finetune_niters=25,
-                max_obs=256,
-                batch_size=16,
-                max_pretrain_samples=512,
-                max_finetune_samples=800,
-                patience=8,
-                finetune_patience=8,
-            )
-        from ts_model_training.primenet.train_loop import train_fold
-
-        out = Path(self.args.paths["output_path"])
-        metrics = train_fold(
-            self.args.cohort,
-            self.args.fold,
-            params,
-            out,
-            skip_export=getattr(self.args, "skip_export", False),
-            skip_pretrain=getattr(self.args, "skip_pretrain", False),
-        )
-        self.args.logger.write(f"PrimeNet test metrics: {metrics}")
-        print(f"\nDone. Results: {out}")
 
             
     def train_best(self): # after CV
