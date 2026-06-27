@@ -252,30 +252,32 @@ class BatcherD_sup(Batcher):
 
 
 class BatcherD_unsup(Batcher):
-    """PrimeNet pretrain batches: snapshot rows from pooled unlabeled tensors."""
+    """PrimeNet pretrain batches via vendored CLDataCollator dataloaders."""
 
     def __init__(self, args, input_dict):
+        from ts_model_training.primenet.timebert_adapter import build_pretrain_dataloaders
+
         pre = input_dict["pretrain"]
-        self.X_train = pre["X_train"]
-        self.X_val = pre["X_val"]
-        self.train_rows = np.arange(len(self.X_train))
+        dl_meta = build_pretrain_dataloaders(pre["X_train"], pre["X_val"], args)
+        self.train_loader = dl_meta["train_dataloader"]
+        self.val_loader = dl_meta["val_dataloader"]
+        self.n_train_batches = dl_meta["n_train_batches"]
+        args.primenet_max_len = dl_meta["max_len"]
+        self._train_iter = None
         super().__init__(args, input_dict)
-        self.set_cycler()
 
     def set_cycler(self):
-        self.train_cycler = CycleIndex(self.train_rows, self.args.train_batch_size)
+        return
 
     def get_batch(self, ind=None):
-        if ind is None:
-            ind = self._get_indices(None)
-        snapshot = torch.FloatTensor(self.X_train[ind])
-        return {"snapshot": snapshot}
+        if self._train_iter is None:
+            self._train_iter = iter(self.train_loader)
+        try:
+            return next(self._train_iter)
+        except StopIteration:
+            self._train_iter = iter(self.train_loader)
+            return next(self._train_iter)
 
     def get_val_batches(self):
-        bs = self.args.eval_batch_size
-        batches = []
-        for start in range(0, len(self.X_val), bs):
-            rows = np.arange(start, min(len(self.X_val), start + bs))
-            batches.append({"snapshot": torch.FloatTensor(self.X_val[rows])})
-        return batches
+        return list(self.val_loader)
 
