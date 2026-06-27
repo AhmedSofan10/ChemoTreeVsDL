@@ -9,14 +9,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from config.constants import PRIMENET_VENDOR_ROOT, PROJECT_ROOT
+from config.constants import PROJECT_ROOT
 
 
 def _env():
     env = os.environ.copy()
     root = str(PROJECT_ROOT)
     env["PYTHONPATH"] = root + os.pathsep + env.get("PYTHONPATH", "")
-    env["PRIMENET_ROOT"] = str(PRIMENET_VENDOR_ROOT.resolve())
     return env
 
 
@@ -39,8 +38,6 @@ def main():
     args = parser.parse_args()
 
     os.chdir(PROJECT_ROOT)
-    if not (PRIMENET_VENDOR_ROOT / "timebert").is_dir():
-        sys.exit("Missing vendored PrimeNet at third_party/PrimeNet")
 
     if not args.skip_prepare:
         _run([sys.executable, "scripts/prepare_mimic_from_raw.py", "--cohort", args.cohort])

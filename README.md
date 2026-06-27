@@ -13,7 +13,7 @@ This repository provides a reproducible pipeline to:
 
 **Temporal models**  
 - Regular time series: GRU, LSTM, Temporal Convolutional Network (TCN), SAnD  
-- Irregular time series: GRU-D, InterpNet, STraTS, **PrimeNet** (vendored TimeBERT)
+- Irregular time series: GRU-D, InterpNet, STraTS, **PrimeNet** (native TimeBERT)
 
 See [`docs/PRIMENET.md`](docs/PRIMENET.md) and [`notebooks/primenet_mimic_iv_colab.ipynb`](notebooks/primenet_mimic_iv_colab.ipynb) for MIMIC-IV NF training on Google Colab.
 

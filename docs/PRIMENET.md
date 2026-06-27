@@ -1,14 +1,17 @@
-# PrimeNet integration (vendored)
+# PrimeNet integration (native TimeBERT)
 
 PrimeNet ([Roy Chowdhury et al., AAAI 2023](https://github.com/ranakroychowdhury/PrimeNet)) is integrated for **MIMIC-IV neutropenic fever** using the same cohort, folds, and top-100 labs as STraTS.
 
 ## Layout
 
-- `third_party/PrimeNet/` — vendored upstream TimeBERT (pinned commit in `third_party/PrimeNet/VENDOR.md`)
-- `ts_model_training/primenet/` — export, train loop, metrics (ChemoTree data paths)
+- `ts_model_training/primenet/timebert/` — native TimeBERT implementation (`modules.py`, `models.py`, `collator.py`)
+- `ts_model_training/ts_models/ts_primenet.py` — `PRIMENET_TS` model (parallel to `STRATS_TS`)
+- `ts_model_training/primenet/` — snapshot builder, export, metrics
 - `colab_primenet_train.py` — Google Colab entry point
 - `notebooks/primenet_mimic_iv_colab.ipynb` — Colab notebook
 - `scripts/prepare_mimic_from_raw.py` — build `MIMIC_IV/saved_data/` from `data/raw/`
+
+Attribution: see `ts_model_training/primenet/timebert/ATTRIBUTION.md`.
 
 ## Train (local GPU)
 
@@ -28,7 +31,6 @@ pip install -r requirements-colab.txt
 # e.g. CUDA 12.x: pip install torch --index-url https://download.pytorch.org/whl/cu124
 
 export PYTHONPATH="$(pwd)"
-export PRIMENET_ROOT="$(pwd)/third_party/PrimeNet"
 ```
 
 Verify GPU:
