@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 import pandas as pd
 from ts_model_training.utils import discrete_tensors, fill_impute, fill_mean, compute_means_stds_df, compute_deltas, compute_holdout
+from ts_model_training.primenet.snapshot_builder import build_fold_tensors
 from pathlib import Path
 class Preprocessor:
     def __init__(self, dataset):
@@ -327,4 +328,135 @@ class PreprocessorC_sup(PreprocessorC): # supervised
         self.input_dict = {"values" : self.values, "times" : self.times, "varis": self.varis}
         self.args.logger.write('Input prepared')
 
+
+class PreprocessorD(Preprocessor):  # primenet
+    """Build PrimeNet snapshot tensors [N, T, 2*D+1] (parallel to PreprocessorC / STraTS)."""
+
+    def get_vars(self):
+        raise NotImplementedError
+
+    def compute_means_stds(self):
+        raise NotImplementedError
+
+    def trim(self):
+        self.data = self.data.groupby(
+            ["hadm_id", "ts_ind", "itemid", "var_ind", "minute"]
+        ).value.mean().reset_index()
+
+    def normalise(self):
+        raise NotImplementedError
+
+    def prepare_inputs(self):
+        raise NotImplementedError
+
+    def _max_obs(self):
+        return int(getattr(self.args, "model_params", {}).get("max_obs", getattr(self.args, "max_obs", 512)))
+
+    def _build_packs(self):
+        self.trim()
+        packs = build_fold_tensors(
+            self.dataset.cohort,
+            self.data,
+            self.variables,
+            self.args.ids["train"],
+            self.args.ids["val"],
+            self.args.ids["test"],
+            self._max_obs(),
+            self.args.days_before_discharge,
+        )
+        meta = packs["meta"]
+        ts_map = meta["ts_map"]
+
+        def ts_to_row(hadm_ids):
+            return {ts_map[int(h)]: i for i, h in enumerate(hadm_ids)}
+
+        packs["meta"]["ts_to_row"] = {
+            "train": ts_to_row(meta["train_hadm_ids"]),
+            "val": ts_to_row(meta["val_hadm_ids"]),
+            "test": ts_to_row(meta["test_hadm_ids"]),
+        }
+        return packs
+
+    def dump_stats(self):
+        pt_var_path = os.path.join(self.args.paths["output_path"], "primenet_saved_variables.pkl")
+        with open(pt_var_path, "wb") as f:
+            pickle.dump(
+                (self.pt_variables, self.pt_means_stds, self.input_dim),
+                f,
+            )
+
+
+class PreprocessorD_unsup(PreprocessorD):
+    """PrimeNet pretrain: pooled unlabeled snapshots (80/20 train/val)."""
+
+    def get_vars(self):
+        self.pt_variables = list(self.variables) if hasattr(self, "variables") else sorted(self.data.itemid.unique())
+        return self.pt_variables
+
+    def compute_means_stds(self):
+        self.pt_means_stds = compute_means_stds_df(self.data, self.train_ind)
+        return self.pt_means_stds
+
+    def prepare_inputs(self):
+        self.set_variables()
+        self.pt_means_stds = compute_means_stds_df(self.data, self.train_ind)
+        self.pt_variables = self.variables
+        packs = self._build_packs()
+        ft = packs["finetune"]
+        pre = packs["pretrain"]
+        self.input_dim = packs["meta"]["input_dim"]
+        self.input_dict = {
+            "pretrain": pre,
+            "finetune": ft,
+            "input_dim": self.input_dim,
+            "features": packs["meta"]["features"],
+            "ts_to_row": packs["meta"]["ts_to_row"],
+        }
+        self.dump_stats()
+        self.args.logger.write(
+            f"PrimeNet pretrain snapshots: train {pre['X_train'].shape}, val {pre['X_val'].shape}"
+        )
+
+
+class PreprocessorD_sup(PreprocessorD):
+    """PrimeNet finetune / standard: labeled train/val/test snapshots."""
+
+    def __init__(self, dataset):
+        super().__init__(dataset)
+        if self.args.train_mode == "finetune":
+            with open(self.args.pt_var_path, "rb") as f:
+                self.pt_variables, self.pt_means_stds, self.input_dim = pickle.load(f)
+
+    def get_vars(self):
+        if self.args.train_mode == "finetune":
+            return self.pt_variables
+        return sorted(self.data.itemid.unique())
+
+    def compute_means_stds(self):
+        if self.args.train_mode == "finetune":
+            return self.pt_means_stds
+        return compute_means_stds_df(self.data, self.train_ind)
+
+    def prepare_inputs(self):
+        self.set_variables()
+        if self.args.train_mode != "finetune":
+            self.pt_means_stds = compute_means_stds_df(self.data, self.train_ind)
+            self.pt_variables = self.variables
+        packs = self._build_packs()
+        ft = packs["finetune"]
+        pre = packs["pretrain"]
+        self.input_dim = packs["meta"]["input_dim"]
+        self.input_dict = {
+            "finetune": ft,
+            "pretrain": pre,
+            "input_dim": self.input_dim,
+            "features": packs["meta"]["features"],
+            "ts_to_row": packs["meta"]["ts_to_row"],
+        }
+        if self.args.train_mode != "finetune":
+            self.dump_stats()
+        self.args.logger.write(
+            f"PrimeNet finetune snapshots: train {ft['X_train'].shape}, "
+            f"val {ft['X_val'].shape}, test {ft['X_test'].shape}"
+        )
 
