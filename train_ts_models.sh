@@ -10,6 +10,16 @@ run_commands() {
     done
 }
 
+run_primenet_commands() {
+    template="$1"
+    for fold in 0 1 2 3 4; do
+        eval "$template --dataset MIMIC_IV --cohort mimic_cohort_NF_30_days --fold $fold --model_type primenet --feature_threshold --grid none"
+    done
+}
+
 template="python -m ts_model_training.main"
 run_commands "$template --static_threshold 0 --hid_dim_demo 32 --prefix test --grid nested  --config ts_config_params.yaml"
+
+# PrimeNet (MIMIC-IV NF only; writes results_final.csv per fold):
+# run_primenet_commands "$template --static_threshold 0 --prefix primenet --config ts_config_params.yaml"
 
