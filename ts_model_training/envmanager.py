@@ -221,6 +221,10 @@ class EnvManager:
             self.args.eval_batch_size = int(mp["batch_size"])
         self.set_ids(mode="default")
 
+        out = Path(self.args.paths["output_path"])
+        pre_ckpt = out / "checkpoint_best.bin"
+        legacy_ckpt = out / "primenet_pretrain.h5"
+
         run_pretrain = self.args.train_mode in ("pretrain", "standard")
         run_finetune = self.args.train_mode in ("finetune", "standard")
 
