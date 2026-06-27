@@ -214,3 +214,68 @@ class BatcherC_sup(Batcher):
         }
 
 
+class BatcherD_sup(Batcher):
+    """PrimeNet finetune batches: padded snapshot tensors [B, T, 2*D+1]."""
+
+    def __init__(self, args, input_dict):
+        super().__init__(args, input_dict)
+        ft = input_dict["finetune"]
+        self.X = {
+            "train": ft["X_train"],
+            "val": ft["X_val"],
+            "test": ft["X_test"],
+        }
+        self.y = {
+            "train": ft["y_train"],
+            "val": ft["y_val"],
+            "test": ft["y_test"],
+        }
+        self.ts_to_row = input_dict["ts_to_row"]
+        self._split = "train"
+
+    def _rows_for(self, split, ts_inds):
+        row_map = self.ts_to_row[split]
+        return [row_map[int(i)] for i in ts_inds]
+
+    def get_batch(self, ind=None, split=None):
+        split = split or self._split
+        if ind is None:
+            ind = self._get_indices(None)
+        rows = self._rows_for(split, ind)
+        snapshot = torch.FloatTensor(self.X[split][rows])
+        labels = torch.LongTensor(self.y[split][rows])
+        return {"snapshot": snapshot, "labels": labels}
+
+    def get_eval_batch(self, split, batch_ind):
+        self._split = split
+        return self.get_batch(batch_ind, split=split)
+
+
+class BatcherD_unsup(Batcher):
+    """PrimeNet pretrain batches: snapshot rows from pooled unlabeled tensors."""
+
+    def __init__(self, args, input_dict):
+        pre = input_dict["pretrain"]
+        self.X_train = pre["X_train"]
+        self.X_val = pre["X_val"]
+        self.train_rows = np.arange(len(self.X_train))
+        super().__init__(args, input_dict)
+        self.set_cycler()
+
+    def set_cycler(self):
+        self.train_cycler = CycleIndex(self.train_rows, self.args.train_batch_size)
+
+    def get_batch(self, ind=None):
+        if ind is None:
+            ind = self._get_indices(None)
+        snapshot = torch.FloatTensor(self.X_train[ind])
+        return {"snapshot": snapshot}
+
+    def get_val_batches(self):
+        bs = self.args.eval_batch_size
+        batches = []
+        for start in range(0, len(self.X_val), bs):
+            rows = np.arange(start, min(len(self.X_val), start + bs))
+            batches.append({"snapshot": torch.FloatTensor(self.X_val[rows])})
+        return batches
+
