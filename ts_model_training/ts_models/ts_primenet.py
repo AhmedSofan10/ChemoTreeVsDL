@@ -10,7 +10,6 @@ from ts_model_training.primenet.timebert_adapter import (
     build_classification_model,
     build_pretrain_model,
     classification_forward,
-    load_bert_checkpoint,
     pretrain_forward,
 )
 
@@ -32,8 +31,6 @@ class PRIMENET_TS(nn.Module):
         else:
             self.core = build_classification_model(args, self.dim)
             self.pn_args = None
-            if self.train_mode == "finetune" and getattr(args, "pt_dict_path", None):
-                load_bert_checkpoint(self.core, args.pt_dict_path)
 
     @property
     def bert(self):
