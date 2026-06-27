@@ -405,6 +405,7 @@ class PreprocessorD_unsup(PreprocessorD):
         ft = packs["finetune"]
         pre = packs["pretrain"]
         self.input_dim = packs["meta"]["input_dim"]
+        self.args.input_dim = self.input_dim
         self.input_dict = {
             "pretrain": pre,
             "finetune": ft,
@@ -446,6 +447,7 @@ class PreprocessorD_sup(PreprocessorD):
         ft = packs["finetune"]
         pre = packs["pretrain"]
         self.input_dim = packs["meta"]["input_dim"]
+        self.args.input_dim = self.input_dim
         self.input_dict = {
             "finetune": ft,
             "pretrain": pre,
