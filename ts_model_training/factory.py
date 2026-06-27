@@ -5,9 +5,10 @@ from ts_model_training.ts_models.ts_lstm import LSTM_TS
 from ts_model_training.ts_models.ts_grud import GRUD_TS
 from ts_model_training.ts_models.ts_interpnet import INTERPNET_TS
 from ts_model_training.ts_models.ts_strats import STRATS_TS
+from ts_model_training.ts_models.ts_primenet import PRIMENET_TS
 from ts_model_training.ts_models.mlp import MLP
 
-from ts_model_training.batcher import Batcher, BatcherA, BatcherB, BatcherC_sup, BatcherC_unsup
+from ts_model_training.batcher import Batcher, BatcherA, BatcherB, BatcherC_sup, BatcherC_unsup, BatcherD_sup, BatcherD_unsup
 
 MODEL_CLASSES = {
     'gru': GRU_TS,
@@ -17,6 +18,7 @@ MODEL_CLASSES = {
     'grud': GRUD_TS,
     'interpnet': INTERPNET_TS,
     'strats': STRATS_TS,
+    'primenet': PRIMENET_TS,
     'mlp': MLP
 }
 
@@ -41,6 +43,10 @@ def build_batcher(args, input_dict):
         batcher = BatcherC_unsup(args, input_dict)
     elif model_type in ['strats', 'istrats'] and args.train_mode != "pretrain":
         batcher = BatcherC_sup(args, input_dict)
+    elif model_type == "primenet" and args.train_mode == "pretrain":
+        batcher = BatcherD_unsup(args, input_dict)
+    elif model_type == "primenet":
+        batcher = BatcherD_sup(args, input_dict)
     else:
         raise ValueError(f"Unknown model type: {args.model_type}")
 
