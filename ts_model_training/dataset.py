@@ -2,7 +2,14 @@ import pandas as pd
 import numpy as np
 import pickle
 from ts_model_training.utils import safe_pos_freq, remove_features_not_in_train, compute_lab_frequency, ids_in_data, set_splits, compute_class_weight
-from ts_model_training.preprocessor import PreprocessorA, PreprocessorB, PreprocessorC_sup, PreprocessorC_unsup
+from ts_model_training.preprocessor import (
+    PreprocessorA,
+    PreprocessorB,
+    PreprocessorC_sup,
+    PreprocessorC_unsup,
+    PreprocessorD_sup,
+    PreprocessorD_unsup,
+)
 
 from config.constants import PROJECT_ROOT
 
@@ -145,6 +152,10 @@ class TimeSeriesDataset:
             self.preproc = PreprocessorC_unsup(self)
         elif model_type in ['strats', 'istrats'] and self.args.train_mode != "pretrain":
             self.preproc = PreprocessorC_sup(self)
+        elif model_type == "primenet" and self.args.train_mode == "pretrain":
+            self.preproc = PreprocessorD_unsup(self)
+        elif model_type == "primenet":
+            self.preproc = PreprocessorD_sup(self)
         else:
             raise ValueError(f"Unknown model type: {model_type}")
         # preprocess data accordingly
