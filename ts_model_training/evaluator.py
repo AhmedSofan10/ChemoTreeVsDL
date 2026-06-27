@@ -30,7 +30,10 @@ class Evaluator:
             #batches.append(self.batcher.get_batch(batch_ind))
             # data augmentation for pretraining
             for _ in range(rep):
-                batches.append(self.batcher.get_batch(batch_ind))
+                if self.args.model_type == "primenet":
+                    batches.append(self.batcher.get_batch(batch_ind, split=split))
+                else:
+                    batches.append(self.batcher.get_batch(batch_ind))
         if cache:
             self.io[split] = batches
         return batches
@@ -53,18 +56,22 @@ class EvaluatorTrain(Evaluator):
         cum_loss, num_batches, total_time = 0.0, 0, 0.0
 
         for batch in tqdm(batches, desc="running forward pass"):
-            # get data and labels
-            labels = batch['labels'].to(self.args.device)
-            true.append(labels.cpu())
-            batch = {k: v.to(self.args.device) for k, v in batch.items()}  
-            
+            batch = {k: v.to(self.args.device) for k, v in batch.items()}
+            if self.args.model_type == "primenet":
+                labels = batch["labels"].long()
+                true.append(labels.cpu())
+            else:
+                labels = batch["labels"].to(self.args.device)
+                true.append(labels.cpu())
+
             with torch.no_grad():
-                # forward time
                 logits, _ = model(**batch)
-                # compute loss
                 loss = model.compute_loss(logits, labels)
                 cum_loss += loss.item()
-                pred.append(torch.sigmoid(logits).cpu())
+                if self.args.model_type == "primenet":
+                    pred.append(torch.softmax(logits, dim=-1)[:, 1].cpu())
+                else:
+                    pred.append(torch.sigmoid(logits).cpu())
                 num_batches += 1
 
         avg_loss = cum_loss / num_batches if num_batches else None
@@ -123,6 +130,19 @@ class EvaluatorPretrain(Evaluator):
         self.args.logger.write(f"Result on {split} split at train step {train_step}: {format_dict(result)}")
         return result
 
+
+class EvaluatorPrimeNetPretrain(EvaluatorPretrain):
+    def evaluate(self, model, split, train_step):
+        from ts_model_training.primenet.timebert_adapter import eval_pretrain_epoch
+
+        self.args.logger.write(f"\nEvaluating on split = {split}")
+        model.eval()
+        val_acc = eval_pretrain_epoch(model.core, self.batcher.val_loader, model.pn_args)
+        result = {"loss": None, "val_acc": val_acc}
+        self.args.logger.write(
+            f"Result on {split} split at train step {train_step}: {format_dict(result)}"
+        )
+        return result
 
 """
         if split == "val" and self.args.calibrate_threshold:
