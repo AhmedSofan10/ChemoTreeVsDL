@@ -215,12 +215,11 @@ class EnvManager:
             )
         self.set_model_params(mode="default")
         self._apply_primenet_fast_overrides()
-        self.set_ids(mode="default")
-
-        out = Path(self.args.paths["output_path"])
-        pre_ckpt = out / "checkpoint_best.bin"
-        legacy_ckpt = out / "primenet_pretrain.h5"
         mp = self.args.model_params
+        if "batch_size" in mp:
+            self.args.train_batch_size = int(mp["batch_size"])
+            self.args.eval_batch_size = int(mp["batch_size"])
+        self.set_ids(mode="default")
 
         run_pretrain = self.args.train_mode in ("pretrain", "standard")
         run_finetune = self.args.train_mode in ("finetune", "standard")
