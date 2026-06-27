@@ -137,7 +137,9 @@ class EvaluatorPrimeNetPretrain(EvaluatorPretrain):
 
         self.args.logger.write(f"\nEvaluating on split = {split}")
         model.eval()
-        val_acc = eval_pretrain_epoch(model.core, self.batcher.val_loader, model.pn_args)
+        val_acc = eval_pretrain_epoch(
+            model.core, self.batcher.val_loader, self.args.device
+        )
         result = {"loss": None, "val_acc": val_acc}
         self.args.logger.write(
             f"Result on {split} split at train step {train_step}: {format_dict(result)}"

@@ -252,7 +252,7 @@ class BatcherD_sup(Batcher):
 
 
 class BatcherD_unsup(Batcher):
-    """PrimeNet pretrain batches via vendored CLDataCollator dataloaders."""
+    """PrimeNet pretrain batches via native CLDataCollator dataloaders."""
 
     def __init__(self, args, input_dict):
         from ts_model_training.primenet.timebert_adapter import build_pretrain_dataloaders

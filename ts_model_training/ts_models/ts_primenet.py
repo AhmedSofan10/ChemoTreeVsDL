@@ -1,4 +1,11 @@
-"""PrimeNet (vendored TimeBERT) wrapper for the unified ts_model_training pipeline."""
+"""
+PrimeNet / TimeBERT time-series model (native implementation).
+
+Parallel to STRATS_TS in ts_strats.py: registered in factory.py and trained
+via the unified Preprocessor → Batcher → Trainer pipeline.
+
+Architecture lives in ts_model_training.primenet.timebert (modules, models, collator).
+"""
 
 from __future__ import annotations
 
@@ -11,11 +18,12 @@ from ts_model_training.primenet.timebert_adapter import (
     build_pretrain_model,
     classification_forward,
     pretrain_forward,
+    primenet_params,
 )
 
 
 class PRIMENET_TS(nn.Module):
-    """TimeBERT classification / pretraining model (parallel to STRATS_TS)."""
+    """TimeBERT for ChemoTree MIMIC-IV NF (pretrain + finetune)."""
 
     def __init__(self, args):
         super().__init__()
@@ -25,19 +33,29 @@ class PRIMENET_TS(nn.Module):
         if self.dim <= 0:
             raise ValueError("args.input_dim must be set before building PRIMENET_TS")
 
-        if self.train_mode == "pretrain":
-            max_len = int(getattr(args, "primenet_max_len", 512))
-            self.core, self.pn_args = build_pretrain_model(args, max_len, self.dim)
+        self.pretrain = self.train_mode == "pretrain"
+        self.finetune = self.train_mode == "finetune"
+        max_len = int(getattr(args, "primenet_max_len", 512))
+
+        if self.pretrain:
+            self.core = build_pretrain_model(args, max_len, self.dim)
         else:
-            self.core = build_classification_model(args, self.dim)
-            self.pn_args = None
+            self.core = build_classification_model(args, self.dim, max_length=max_len)
 
     @property
     def bert(self):
         return self.core.bert
 
-    def forward(self, snapshot=None, labels=None, value=None, time=None, mask=None, **kwargs):
-        if self.train_mode == "pretrain":
+    def forward(
+        self,
+        snapshot=None,
+        labels=None,
+        value=None,
+        time=None,
+        mask=None,
+        **kwargs,
+    ):
+        if self.pretrain:
             batch = {"value": value, "time": time, "mask": mask}
             return pretrain_forward(self.core, batch)
 
@@ -50,3 +68,7 @@ class PRIMENET_TS(nn.Module):
     def predict(self, snapshot=None, **kwargs):
         logits, _ = self.forward(snapshot=snapshot, **kwargs)
         return torch.softmax(logits, dim=-1)[:, 1]
+
+    def config_summary(self) -> dict:
+        """Training hyperparameters (analogous to STRATS hid_dim / num_layers)."""
+        return primenet_params(self.args)
