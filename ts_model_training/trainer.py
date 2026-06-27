@@ -7,7 +7,7 @@ import pickle
 import time
 from tqdm import tqdm
 from torch.optim import AdamW
-from ts_model_training.evaluator import EvaluatorPretrain, EvaluatorTrain
+from ts_model_training.evaluator import EvaluatorPretrain, EvaluatorTrain, EvaluatorPrimeNetPretrain
 from ts_model_training.saver import ResultSaverGrid, ResultSaverBest
 from ts_model_training.tracker import Tracker
 from ts_model_training.utils import format_dict, count_parameters
@@ -43,7 +43,10 @@ class Trainer:
         self.val_losses_per_epoch = []            
 
         # calculate batches per epoch and steps
-        self.num_batches_per_epoch = int(np.ceil(len(self.splits["train"]) / self.args.train_batch_size))
+        if self.args.model_type == "primenet" and self.args.train_mode == "pretrain":
+            self.num_batches_per_epoch = int(getattr(self.batcher, "n_train_batches", 1))
+        else:
+            self.num_batches_per_epoch = int(np.ceil(len(self.splits["train"]) / self.args.train_batch_size))
         
         # TO DO : CHECK BEST batch num calculation
         #num_neg = (self.batcher.y[self.batcher.splits['train']] == 0).sum()
@@ -60,6 +63,8 @@ class Trainer:
         )
         
     def _setup_evaluator(self):
+        if self.args.train_mode == "pretrain" and self.args.model_type == "primenet":
+            return EvaluatorPrimeNetPretrain(self.args, self.batcher)
         if self.args.train_mode == "pretrain":
             return EvaluatorPretrain(self.args, self.batcher)
         return EvaluatorTrain(self.args, self.batcher)
@@ -78,14 +83,18 @@ class Trainer:
         self.args.logger.write(f"\nSelected model {self.args.model_type} using device {self.args.device} in {self.args.train_mode} mode")
         # if pretrained model available, copy parameters
         if self.args.train_mode == "finetune":
-            pt_state_dict = torch.load(self.args.pt_dict_path, map_location=self.args.device)
-            missing_keys, unexpected_keys = self.model.load_state_dict(pt_state_dict, strict=False)
-            if missing_keys:
-                self.args.logger.write(f"Warning: Missing keys in loaded state dict: {missing_keys}")
-            if unexpected_keys:
-                self.args.logger.write(f"Warning: Unexpected keys in loaded state dict: {unexpected_keys}")
+            if self.args.model_type == "primenet":
+                from ts_model_training.primenet.timebert_adapter import load_bert_checkpoint
+                load_bert_checkpoint(self.model.core, self.args.pt_dict_path)
+            else:
+                pt_state_dict = torch.load(self.args.pt_dict_path, map_location=self.args.device)
+                missing_keys, unexpected_keys = self.model.load_state_dict(pt_state_dict, strict=False)
+                if missing_keys:
+                    self.args.logger.write(f"Warning: Missing keys in loaded state dict: {missing_keys}")
+                if unexpected_keys:
+                    self.args.logger.write(f"Warning: Unexpected keys in loaded state dict: {unexpected_keys}")
 
-            if self.args.freeze:
+            if self.args.model_type != "primenet" and self.args.freeze:
                 # freeze all parameters
                 for param in self.model.parameters():
                     param.requires_grad = False
@@ -178,11 +187,13 @@ class Trainer:
 
             # forward pass
             if self.args.train_mode == "pretrain":
-                # skip empty batches
-                if batch['forecast_mask'].sum() == 0:
+                if self.args.model_type == "primenet":
+                    loss, _ = self.model(**batch)
+                elif batch['forecast_mask'].sum() == 0:
                     self.args.logger.write('Skipped empty batch in training.')
                     continue
-                loss, _ = self.model(**batch) 
+                else:
+                    loss, _ = self.model(**batch)
             else:
                 logits, _ = self.model(**batch)  
                 loss = self.model.compute_loss(logits, batch['labels']) 
@@ -247,6 +258,8 @@ class Trainer:
             # Determine current validation metric
             if self.args.criterion == "auc":
                 curr_val_metric = val_res['auprc'] + val_res['auroc']
+            elif self.args.model_type == "primenet" and self.args.train_mode == "pretrain":
+                curr_val_metric = val_res.get("val_acc", 0.0)
             else:  # default is loss
                 curr_val_metric = -val_res['loss']
 
@@ -266,7 +279,13 @@ class Trainer:
         self.best_val_res = val_res
         self.best_test_res = test_res
         self.args.logger.write('\nSaving ckpt at ' + self.model_path_best)
-        torch.save(self.model.state_dict(), self.model_path_best)
+        if self.args.model_type == "primenet" and self.args.train_mode == "pretrain":
+            torch.save(
+                {"model_state_dict": self.model.core.bert.state_dict()},
+                self.model_path_best,
+            )
+        else:
+            torch.save(self.model.state_dict(), self.model_path_best)
         self.wait = self.args.patience
         self.args.logger.write('Wait still at ' + str(self.wait))
         self.tracker.update_train_total()
