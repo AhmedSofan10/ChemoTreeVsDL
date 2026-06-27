@@ -10,6 +10,6 @@ Included files (training runtime only):
 - `pretrain.py` — pretrain CLI defaults and train/eval loops
 - `utils.py` — dataloaders and irregular sample helpers
 
-Not vendored: datasets, preprocess scripts, `finetune.py` (ChemoTree uses `ts_model_training/primenet/train_loop.py`).
+Not vendored: datasets, preprocess scripts, `finetune.py` (ChemoTree uses `ts_model_training/ts_models/ts_primenet.py` and `primenet/timebert_adapter.py`).
 
 License: see upstream repository (AAAI 2023 publication).

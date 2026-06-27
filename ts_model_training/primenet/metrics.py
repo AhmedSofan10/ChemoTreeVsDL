@@ -1,4 +1,4 @@
-"""Classification metrics aligned with ts_model_training.evaluator (STraTS)."""
+"""Classification metrics for PrimeNet (aligned with ts_model_training.evaluator)."""
 
 from __future__ import annotations
 
