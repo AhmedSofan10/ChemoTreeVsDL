@@ -153,6 +153,9 @@ class EnvManager:
         elif self.args.model_type == "primenet" and self.args.load_ckpt_path is not None:
             self._resolve_primenet_finetune_ckpt()
 
+        elif self.args.model_type == "primenet" and getattr(self.args, "supervised_only", False):
+            self.args.train_mode = "finetune"
+
         elif self.args.model_type == "primenet" and self.args.pretrain:
             self.args.train_mode = "pretrain"
 
@@ -197,7 +200,7 @@ class EnvManager:
             "pretrain_niters": 25,
             "finetune_niters": 25,
             "max_obs": 256,
-            "batch_size": 16,
+            "batch_size": 8,
             "max_pretrain_samples": 512,
             "max_finetune_samples": 800,
             "patience": 8,
@@ -206,6 +209,8 @@ class EnvManager:
         self.args.model_params.update(fast)
         for key, value in fast.items():
             setattr(self.args, key, value)
+        if hasattr(self.args, "logger"):
+            self.args.logger.write(f"PrimeNet --fast overrides applied: {fast}")
 
     def _train_primenet_pipeline(self):
         """Pretrain + finetune via unified Preprocessor → Trainer path."""
@@ -235,10 +240,15 @@ class EnvManager:
             self.train()
 
         if run_finetune:
-            if not (
+            has_external_ckpt = (
                 self.args.train_mode == "finetune"
                 and getattr(self.args, "load_ckpt_path", None)
-            ):
+            )
+            supervised_only = getattr(self.args, "supervised_only", False)
+            if supervised_only:
+                self.args.pt_var_path = None
+                self.args.pt_dict_path = None
+            elif not has_external_ckpt:
                 self.args.pt_var_path = out / "primenet_saved_variables.pkl"
                 if pre_ckpt.is_file():
                     self.args.pt_dict_path = pre_ckpt

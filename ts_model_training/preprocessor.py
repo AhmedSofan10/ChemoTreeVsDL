@@ -422,25 +422,32 @@ class PreprocessorD_unsup(PreprocessorD):
 class PreprocessorD_sup(PreprocessorD):
     """PrimeNet finetune / standard: labeled train/val/test snapshots."""
 
+    def _uses_pretrained_stats(self):
+        return (
+            self.args.train_mode == "finetune"
+            and not getattr(self.args, "supervised_only", False)
+            and getattr(self.args, "pt_var_path", None)
+        )
+
     def __init__(self, dataset):
         super().__init__(dataset)
-        if self.args.train_mode == "finetune":
+        if self._uses_pretrained_stats():
             with open(self.args.pt_var_path, "rb") as f:
                 self.pt_variables, self.pt_means_stds, self.input_dim = pickle.load(f)
 
     def get_vars(self):
-        if self.args.train_mode == "finetune":
+        if self._uses_pretrained_stats():
             return self.pt_variables
         return sorted(self.data.itemid.unique())
 
     def compute_means_stds(self):
-        if self.args.train_mode == "finetune":
+        if self._uses_pretrained_stats():
             return self.pt_means_stds
         return compute_means_stds_df(self.data, self.train_ind)
 
     def prepare_inputs(self):
         self.set_variables()
-        if self.args.train_mode != "finetune":
+        if not self._uses_pretrained_stats():
             self.pt_means_stds = compute_means_stds_df(self.data, self.train_ind)
             self.pt_variables = self.variables
         packs = self._build_packs()
@@ -455,7 +462,7 @@ class PreprocessorD_sup(PreprocessorD):
             "features": packs["meta"]["features"],
             "ts_to_row": packs["meta"]["ts_to_row"],
         }
-        if self.args.train_mode != "finetune":
+        if not self._uses_pretrained_stats() and self.args.train_mode != "finetune":
             self.dump_stats()
         self.args.logger.write(
             f"PrimeNet finetune snapshots: train {ft['X_train'].shape}, "

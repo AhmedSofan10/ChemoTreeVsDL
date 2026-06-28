@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 """
-Prepare MIMIC_IV/saved_data from raw CSV uploads in data/raw/ (Colab-friendly).
+Prepare MIMIC_IV/saved_data from uploads in data/raw/ (Colab-friendly).
 
-Expected files:
-  data/raw/{cohort}.csv
-  data/raw/{cohort}_admissions_labs_{days}_days.csv
+Input (either format in data/raw/):
+  {cohort}.csv.gz   OR   {cohort}.csv
+  {cohort}_admissions_labs_{days}_days.csv.gz   OR   ...csv
+
+Output (always gzip under MIMIC_IV/saved_data/):
+  cohorts/{cohort}.csv.gz
+  features/{cohort}_admissions_labs_{days}_days.csv.gz
+  processed_admission_features_for_ts/{cohort}/..._to_ts.csv.gz
+  folds/{cohort}/fold_{0..4}.pkl
+  top_features/mimic_top100_features.pkl
+
+Or copy an existing Colab MIMIC_IV/saved_data/ tree into the repo root and use --skip-prepare.
 """
 
 from __future__ import annotations
@@ -28,30 +37,36 @@ ITEMIDS_TO_REMOVE = [50934, 50947, 51678]
 SAVED_DATA = PROJECT_ROOT / "MIMIC_IV" / "saved_data"
 
 
-def _gzip_csv(src: Path, dst: Path) -> None:
+def _find_raw_file(stem: str) -> Path:
+    """Resolve data/raw/{stem}.csv.gz or .csv (prefer .gz)."""
+    for name in (f"{stem}.csv.gz", f"{stem}.csv"):
+        path = RAW_DATA_DIR / name
+        if path.is_file():
+            return path
+    raise FileNotFoundError(
+        f"Missing data/raw/{stem}.csv.gz (or .csv)\n"
+        f"Upload gzip-compressed CSVs to data/raw/ when possible."
+    )
+
+
+def _write_gzip_csv(src: Path, dst: Path) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
-    pd.read_csv(src).to_csv(dst, index=False, compression="gzip")
+    if src.name.endswith(".csv.gz"):
+        df = pd.read_csv(src, compression="gzip")
+    else:
+        df = pd.read_csv(src)
+    df.to_csv(dst, index=False, compression="gzip")
 
 
 def prepare_cohort(cohort: str) -> None:
-    src = RAW_DATA_DIR / f"{cohort}.csv"
-    if not src.is_file():
-        raise FileNotFoundError(
-            f"Missing {src}\n"
-            f"Upload your cohort CSV to data/raw/ (see notebooks/primenet_mimic_iv_colab.ipynb)."
-        )
-    _gzip_csv(src, SAVED_DATA / "cohorts" / f"{cohort}.csv.gz")
+    src = _find_raw_file(cohort)
+    _write_gzip_csv(src, SAVED_DATA / "cohorts" / f"{cohort}.csv.gz")
 
 
 def prepare_features(cohort: str, days: int) -> None:
     name = f"{cohort}_admissions_labs_{days}_days"
-    src = RAW_DATA_DIR / f"{name}.csv"
-    if not src.is_file():
-        raise FileNotFoundError(
-            f"Missing {src}\n"
-            f"Upload your labs CSV to data/raw/ (see notebooks/primenet_mimic_iv_colab.ipynb)."
-        )
-    _gzip_csv(src, SAVED_DATA / "features" / f"{name}.csv.gz")
+    src = _find_raw_file(name)
+    _write_gzip_csv(src, SAVED_DATA / "features" / f"{name}.csv.gz")
 
 
 def build_to_ts(cohort: str, days: int) -> None:

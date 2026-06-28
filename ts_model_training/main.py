@@ -28,7 +28,12 @@ parser.add_argument("--split_seed", default=None)
 parser.add_argument("--fast", action="store_true", help="Disable determinism for faster computation")
 parser.add_argument("--skip-export", action="store_true", help="PrimeNet: reuse exported .pt tensors")
 parser.add_argument("--skip-pretrain", action="store_true", help="PrimeNet: reuse primenet_pretrain.h5 checkpoint")
-                    
+parser.add_argument(
+    "--supervised-only",
+    action="store_true",
+    help="PrimeNet: supervised finetune only (no SSL pretrain, random init)",
+)
+
 args = parser.parse_args()
 
 if args.model_type == "primenet" and args.grid != "none":

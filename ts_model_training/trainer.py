@@ -83,10 +83,14 @@ class Trainer:
         self.args.logger.write(f"\nSelected model {self.args.model_type} using device {self.args.device} in {self.args.train_mode} mode")
         # if pretrained model available, copy parameters
         if self.args.train_mode == "finetune":
-            if self.args.model_type == "primenet":
+            if (
+                self.args.model_type == "primenet"
+                and getattr(self.args, "pt_dict_path", None)
+                and not getattr(self.args, "supervised_only", False)
+            ):
                 from ts_model_training.primenet.timebert_adapter import load_bert_checkpoint
                 load_bert_checkpoint(self.model.core, self.args.pt_dict_path)
-            else:
+            elif self.args.model_type != "primenet":
                 pt_state_dict = torch.load(self.args.pt_dict_path, map_location=self.args.device)
                 missing_keys, unexpected_keys = self.model.load_state_dict(pt_state_dict, strict=False)
                 if missing_keys:
@@ -94,7 +98,12 @@ class Trainer:
                 if unexpected_keys:
                     self.args.logger.write(f"Warning: Unexpected keys in loaded state dict: {unexpected_keys}")
 
-            if self.args.model_type != "primenet" and self.args.freeze:
+            if self.args.model_type == "primenet" and self.args.freeze:
+                for param in self.model.core.bert.parameters():
+                    param.requires_grad = False
+                for param in self.model.core.classifier.parameters():
+                    param.requires_grad = True
+            elif self.args.model_type != "primenet" and self.args.freeze:
                 # freeze all parameters
                 for param in self.model.parameters():
                     param.requires_grad = False
