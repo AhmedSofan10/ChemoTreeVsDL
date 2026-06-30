@@ -73,6 +73,14 @@ def split_snapshot(snapshot: torch.Tensor, dim: int):
     return observed_data, observed_mask, observed_tp
 
 
+def classification_pooling(model, snapshot: torch.Tensor, dim: int) -> torch.Tensor:
+    """TimeBERT pooled representation (before the classification MLP)."""
+    observed_data, observed_mask, observed_tp = split_snapshot(snapshot, dim)
+    x = torch.cat((observed_data, observed_mask), 2)
+    outputs = model.bert(x, observed_tp)
+    return outputs["cls_pooling"]
+
+
 def classification_forward(model, snapshot: torch.Tensor, dim: int) -> torch.Tensor:
     observed_data, observed_mask, observed_tp = split_snapshot(snapshot, dim)
     return model(torch.cat((observed_data, observed_mask), 2), observed_tp)
@@ -124,6 +132,7 @@ __all__ = [
     "build_pretrain_model",
     "build_classification_model",
     "classification_forward",
+    "classification_pooling",
     "load_bert_checkpoint",
     "pretrain_forward",
     "eval_pretrain_epoch",

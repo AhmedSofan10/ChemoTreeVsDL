@@ -461,11 +461,13 @@ class PreprocessorD_sup(PreprocessorD):
             "input_dim": self.input_dim,
             "features": packs["meta"]["features"],
             "ts_to_row": packs["meta"]["ts_to_row"],
+            "demo_norm": self.dataset.demo,
         }
         if not self._uses_pretrained_stats() and self.args.train_mode != "finetune":
             self.dump_stats()
         self.args.logger.write(
             f"PrimeNet finetune snapshots: train {ft['X_train'].shape}, "
-            f"val {ft['X_val'].shape}, test {ft['X_test'].shape}"
+            f"val {ft['X_val'].shape}, test {ft['X_test'].shape}; "
+            f"demographics dim={self.dataset.demo.shape[1]}"
         )
 

@@ -101,7 +101,9 @@ class Trainer:
             if self.args.model_type == "primenet" and self.args.freeze:
                 for param in self.model.core.bert.parameters():
                     param.requires_grad = False
-                for param in self.model.core.classifier.parameters():
+                for param in self.model.demo_emb.parameters():
+                    param.requires_grad = True
+                for param in self.model.classification_head.parameters():
                     param.requires_grad = True
             elif self.args.model_type != "primenet" and self.args.freeze:
                 # freeze all parameters

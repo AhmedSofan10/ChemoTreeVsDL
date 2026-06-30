@@ -231,6 +231,9 @@ class BatcherD_sup(Batcher):
             "test": ft["y_test"],
         }
         self.ts_to_row = input_dict["ts_to_row"]
+        self.demo = input_dict.get("demo_norm")
+        if self.demo is None:
+            raise ValueError("PrimeNet finetune requires demo_norm in input_dict")
         self._split = "train"
 
     def _rows_for(self, split, ts_inds):
@@ -244,7 +247,11 @@ class BatcherD_sup(Batcher):
         rows = self._rows_for(split, ind)
         snapshot = torch.FloatTensor(self.X[split][rows])
         labels = torch.LongTensor(self.y[split][rows])
-        return {"snapshot": snapshot, "labels": labels}
+        return {
+            "snapshot": snapshot,
+            "labels": labels,
+            "demo": torch.FloatTensor(self.demo[ind]),
+        }
 
     def get_eval_batch(self, split, batch_ind):
         self._split = split

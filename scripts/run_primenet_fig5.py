@@ -135,6 +135,10 @@ def _main_base(fast: bool) -> list[str]:
         "--grid",
         "none",
         "--feature_threshold",
+        "--static_threshold",
+        "0",
+        "--hid_dim_demo",
+        "64",
         "--config_path",
         str(CONFIG_PATH),
     ]
