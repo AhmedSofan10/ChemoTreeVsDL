@@ -24,8 +24,12 @@ def build_sequences(
     max_obs: int,
     max_minutes: float,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    var_to_ind = {v: i for i, v in enumerate(features)}
+    hadm_ids = np.asarray(hadm_ids)
     d = len(features)
+    if hadm_ids.size == 0:
+        return np.zeros((0, 1, 2 * d + 1), dtype=np.float32), np.array([], dtype=np.int64)
+
+    var_to_ind = {v: i for i, v in enumerate(features)}
     tensors = []
     labels = []
 
@@ -104,9 +108,16 @@ def build_fold_tensors(
     label_map = cohort.set_index("hadm_id")["label"].astype(int).to_dict()
 
     def pack(hadm_ids):
+        hadm_ids = np.asarray(hadm_ids)
+        if hadm_ids.size == 0:
+            d = len(features)
+            return (
+                np.zeros((0, 1, 2 * d + 1), dtype=np.float32),
+                np.array([], dtype=np.int64),
+            )
         return build_sequences(
             data,
-            np.array(hadm_ids),
+            hadm_ids,
             features,
             means_stds,
             label_map,
@@ -118,7 +129,9 @@ def build_fold_tensors(
     X_val, y_val = pack(ids["val"])
     X_test, y_test = pack(ids["test"])
 
-    max_len = max(X_train.shape[1], X_val.shape[1], X_test.shape[1])
+    max_len = max(X_train.shape[1], X_val.shape[1])
+    if X_test.shape[0] > 0:
+        max_len = max(max_len, X_test.shape[1])
     X_train = pad_seq_len(X_train, max_len)
     X_val = pad_seq_len(X_val, max_len)
     X_test = pad_seq_len(X_test, max_len)
