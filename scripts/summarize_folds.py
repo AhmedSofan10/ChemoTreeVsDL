@@ -35,21 +35,35 @@ def main():
     parser.add_argument("--dataset", default="MIMIC_IV")
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--results-root", default=None)
+    parser.add_argument(
+        "--train-mode",
+        default=None,
+        choices=("standard", "finetune", "pretrain"),
+        help="Results subfolder under time_series/ (auto-detect if omitted)",
+    )
     args = parser.parse_args()
 
     if args.results_root:
         base = Path(args.results_root)
     else:
-        base = (
+        root = (
             Path(args.dataset)
             / "saved_data"
             / "results"
             / args.cohort
             / "time_series"
-            / "standard"
-            / args.model
-            / args.prefix
         )
+        if args.train_mode:
+            base = root / args.train_mode / args.model / args.prefix
+        else:
+            base = None
+            for mode in ("finetune", "standard"):
+                candidate = root / mode / args.model / args.prefix
+                if candidate.is_dir() and any((candidate / f"fold_{i}").exists() for i in range(args.folds)):
+                    base = candidate
+                    break
+            if base is None:
+                base = root / "finetune" / args.model / args.prefix
 
     rows = []
     for fold in range(args.folds):

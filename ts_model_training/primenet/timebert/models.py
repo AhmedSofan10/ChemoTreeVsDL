@@ -77,20 +77,19 @@ class multiTimeAttention(nn.Module):
             return out, p_attn
 
         m = mask.to(query.device)
-        out = val.new_zeros(scores.size(0), scores.size(1), scores.size(2), feat_dim)
+        out = scores.new_zeros(scores.size(0), scores.size(1), scores.size(2), feat_dim)
         p_attn = None
         chunk = 8
         for d0 in range(0, feat_dim, chunk):
             d1 = min(d0 + chunk, feat_dim)
-            # Broadcast mask over heads/query positions; avoid repeat_interleave over full D.
-            m_chunk = m[..., d0:d1].unsqueeze(1).unsqueeze(2)
+            # Match original mask/value broadcasting without repeat_interleave over full D.
             scores_d = scores.unsqueeze(-1).expand(-1, -1, -1, -1, d1 - d0)
-            scores_d = scores_d.masked_fill(m_chunk == 0, -1e9)
+            scores_d = scores_d.masked_fill(m[..., d0:d1].unsqueeze(-3) == 0, -1e9)
             p_attn = F.softmax(scores_d, dim=-2)
             if dropout is not None:
                 p_attn = dropout(p_attn)
             out[..., d0:d1] = torch.sum(
-                p_attn * val[..., d0:d1].unsqueeze(1).unsqueeze(-3),
+                p_attn * value[..., d0:d1].unsqueeze(-3),
                 dim=-2,
             )
         return out, p_attn

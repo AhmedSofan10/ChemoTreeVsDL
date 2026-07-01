@@ -23,5 +23,8 @@ data/raw/*
 *.h5
 logs/
 
+# Accidental nested clone (old third_party PrimeNet tree)
+ChemoTreeVsDL/
+
 # Local cohort uploads (use data/raw/ instead)
 mimic_cohort_*.csv

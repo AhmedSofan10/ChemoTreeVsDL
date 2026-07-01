@@ -15,6 +15,7 @@ dependencies:
   - liblapack
   - pandas
   - tqdm
+  - psutil
   - numpy
   - liblapacke
   - py-xgboost

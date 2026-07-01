@@ -272,11 +272,22 @@ class ExtractorPretrain(Extractor):
         # get ids with labs
         pt_ids = pd.concat(pt_ids, ignore_index=True).drop_duplicates()
 
-        # get cohort ids
-        cohort_subj_ids = np.concatenate([
-            pd.read_csv(self.saved_data_path / 'cohorts' / 'mimic_cohort_NF_30_days.csv.gz', compression='gzip')["subject_id"].values,
-            pd.read_csv(self.saved_data_path / 'cohorts' / 'mimic_cohort_aplasia_45_days.csv.gz', compression='gzip')["subject_id"].values
-        ])
+        # get cohort ids (exclude downstream task subjects from pretrain)
+        exclude_paths = [
+            self.saved_data_path / 'cohorts' / 'mimic_cohort_NF_30_days.csv.gz',
+            self.saved_data_path / 'cohorts' / 'mimic_cohort_aplasia_45_days.csv.gz',
+        ]
+        cohort_subj_ids_list = []
+        for path in exclude_paths:
+            if path.is_file():
+                cohort_subj_ids_list.append(
+                    pd.read_csv(path, compression='gzip')["subject_id"].values
+                )
+            else:
+                self.args.logger.write(f"Pretrain exclusion: skipping missing {path.name}")
+        cohort_subj_ids = (
+            np.concatenate(cohort_subj_ids_list) if cohort_subj_ids_list else np.array([], dtype=np.int64)
+        )
 
         # remove ids in training cohorts
         pt_ids = pt_ids[~pt_ids["subject_id"].isin(cohort_subj_ids)].reset_index(drop=True)
