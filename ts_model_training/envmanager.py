@@ -201,6 +201,7 @@ class EnvManager:
             "finetune_niters": 25,
             "max_obs": 256,
             "batch_size": 8,
+            "pretrain_batch_cap": 8,
             "max_pretrain_samples": 512,
             "max_finetune_samples": 800,
             "patience": 8,
@@ -212,6 +213,19 @@ class EnvManager:
         if hasattr(self.args, "logger"):
             self.args.logger.write(f"PrimeNet --fast overrides applied: {fast}")
 
+    def _apply_primenet_memory_defaults(self):
+        """Cap TimeBERT batch sizes so pretrain val forward fits on ~40GB GPUs."""
+        mp = self.args.model_params
+        cap = int(mp.get("pretrain_batch_cap", 16))
+        bs = int(mp.get("batch_size", cap))
+        if bs > cap:
+            mp["batch_size"] = cap
+            self.args.model_params = mp
+            if hasattr(self.args, "logger"):
+                self.args.logger.write(
+                    f"PrimeNet batch_size capped {bs} -> {cap} (GPU memory)"
+                )
+
     def _train_primenet_pipeline(self):
         """Pretrain + finetune via unified Preprocessor → Trainer path."""
         if self.args.grid != "none":
@@ -219,6 +233,7 @@ class EnvManager:
                 f"PrimeNet supports --grid none only (got {self.args.grid!r})."
             )
         self.set_model_params(mode="default")
+        self._apply_primenet_memory_defaults()
         self._apply_primenet_fast_overrides()
         mp = self.args.model_params
         if "batch_size" in mp:

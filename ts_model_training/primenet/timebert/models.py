@@ -63,18 +63,37 @@ class multiTimeAttention(nn.Module):
                                       nn.Linear(input_dim*num_heads, nhidden)]) # to embed attention weighted values
         
     def attention(self, query, key, value, mask=None, dropout=None):
-        "Compute 'Scaled Dot Product Attention'"
-        dim = value.size(-1)
+        "Compute scaled dot-product attention (chunked over features for T4 memory)."
         d_k = query.size(-1)
-        scores = torch.matmul(query, key.transpose(-2, -1)) \
-                 / math.sqrt(d_k)
-        scores = scores.unsqueeze(-1).repeat_interleave(dim, dim=-1)
-        if mask is not None:
-            scores = scores.masked_fill(mask.to(query.device).unsqueeze(-3) == 0, -1e9)
-        p_attn = F.softmax(scores, dim = -2)
-        if dropout is not None:
-            p_attn = dropout(p_attn)
-        return torch.sum(p_attn.to(query.device)*value.unsqueeze(-3).to(query.device), -2), p_attn.to(query.device)
+        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+        val = value.squeeze(1)
+        feat_dim = val.size(-1)
+
+        if mask is None:
+            p_attn = F.softmax(scores, dim=-2)
+            if dropout is not None:
+                p_attn = dropout(p_attn)
+            out = torch.einsum("bhql,bld->bhqd", p_attn, val)
+            return out, p_attn
+
+        m = mask.to(query.device)
+        out = val.new_zeros(scores.size(0), scores.size(1), scores.size(2), feat_dim)
+        p_attn = None
+        chunk = 8
+        for d0 in range(0, feat_dim, chunk):
+            d1 = min(d0 + chunk, feat_dim)
+            # Broadcast mask over heads/query positions; avoid repeat_interleave over full D.
+            m_chunk = m[..., d0:d1].unsqueeze(1).unsqueeze(2)
+            scores_d = scores.unsqueeze(-1).expand(-1, -1, -1, -1, d1 - d0)
+            scores_d = scores_d.masked_fill(m_chunk == 0, -1e9)
+            p_attn = F.softmax(scores_d, dim=-2)
+            if dropout is not None:
+                p_attn = dropout(p_attn)
+            out[..., d0:d1] = torch.sum(
+                p_attn * val[..., d0:d1].unsqueeze(1).unsqueeze(-3),
+                dim=-2,
+            )
+        return out, p_attn
     
     
     def forward(self, query, key, value, mask=None, dropout=None):

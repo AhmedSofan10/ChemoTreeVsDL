@@ -110,7 +110,8 @@ primenet:
     pretrain_tasks: full2
     pretrain_niters: 2000
     finetune_niters: 2000
-    batch_size: 64
+    batch_size: 16
+    pretrain_batch_cap: 16
     rec_hidden: 128
     embed_time: 128
     num_heads: 1
@@ -128,7 +129,8 @@ primenet:
     pretrain_tasks: full2
     pretrain_niters: 2000
     finetune_niters: 2000
-    batch_size: 64
+    batch_size: 16
+    pretrain_batch_cap: 16
     rec_hidden: 128
     embed_time: 128
     num_heads: 1

@@ -53,18 +53,36 @@ def generate_irregular_samples(
     return combined_data, max_len
 
 
-def _collator_args_from_training_args(args) -> Namespace:
+def _max_obs_from_args(args) -> int:
+    mp = getattr(args, "model_params", {}) or {}
+    return int(mp.get("max_obs", getattr(args, "max_obs", 512)))
+
+
+def _pretrain_train_batch_size(args, n_train: int) -> int:
+    mp = getattr(args, "model_params", {}) or {}
+    cap = int(mp.get("pretrain_batch_cap", mp.get("batch_size", 16)))
+    cap = min(int(mp.get("batch_size", cap)), cap)
+    n_cap = int(mp.get("n", 8000))
+    return max(1, min(n_train, cap, n_cap))
+
+
+def _pretrain_eval_batch_size() -> int:
+    """Val forward is memory-heavy (TimeBERT attention); always batch 1."""
+    return 1
+
+
+def _collator_args_from_training_args(args, train_batch_size: int) -> Namespace:
     mp = getattr(args, "model_params", {}) or {}
     return Namespace(
         pretrain_tasks=mp.get(
             "pretrain_tasks", getattr(args, "pretrain_tasks", "full2")
         ),
-        batch_size=int(mp.get("batch_size", getattr(args, "batch_size", 64))),
+        batch_size=train_batch_size,
         segment_num=int(mp.get("segment_num", getattr(args, "segment_num", 3))),
         mask_ratio_per_seg=float(
             mp.get("mask_ratio_per_seg", getattr(args, "mask_ratio_per_seg", 0.05))
         ),
-        n=8000,
+        n=int(mp.get("n", 8000)),
     )
 
 
@@ -82,26 +100,28 @@ def build_pretrain_dataloaders(
         X_train = X_train[: int(max_pre)]
         X_val = X_val[: max(64, int(max_pre) // 5)]
 
-    collator_args = _collator_args_from_training_args(args)
     input_dim = (X_train.shape[2] - 1) // 2
     X_train, train_max_len = generate_irregular_samples(X_train, input_dim)
     X_val, val_max_len = generate_irregular_samples(X_val, input_dim)
-    max_len = max(train_max_len, val_max_len, 512)
+    obs_cap = _max_obs_from_args(args)
+    # Never pad collator to 512 when real sequences are shorter (was a major OOM source).
+    max_len = min(max(train_max_len, val_max_len, 1), obs_cap)
 
+    train_batch_size = _pretrain_train_batch_size(args, len(X_train))
+    collator_args = _collator_args_from_training_args(args, train_batch_size)
     collator = CLDataCollator(max_len=max_len, args=collator_args)
-    batch_size = min(
-        min(len(X_val), collator_args.batch_size), collator_args.n
-    )
+    eval_batch_size = _pretrain_eval_batch_size()
+
     train_dataloader = DataLoader(
         TimeDataset(X_train),
-        batch_size=batch_size,
+        batch_size=train_batch_size,
         shuffle=True,
         collate_fn=collator,
         num_workers=0,
     )
     val_dataloader = DataLoader(
         TimeDataset(X_val),
-        batch_size=batch_size,
+        batch_size=eval_batch_size,
         shuffle=False,
         collate_fn=collator,
         num_workers=0,
@@ -114,6 +134,8 @@ def build_pretrain_dataloaders(
         "collator_args": collator_args,
         "n_train_batches": len(train_dataloader),
         "n_val_batches": len(val_dataloader),
+        "train_batch_size": train_batch_size,
+        "eval_batch_size": eval_batch_size,
     }
 
 
@@ -130,4 +152,8 @@ def eval_pretrain_loader(model, dataloader, device) -> float:
             out = model(x_batch, time_batch)
             correct += out["correct_num"]
             total += out["total_num"]
+            if getattr(device, "type", str(device)) == "cuda" or str(device).startswith(
+                "cuda"
+            ):
+                torch.cuda.empty_cache()
     return float(correct / total) if total else 0.0
