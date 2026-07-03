@@ -407,6 +407,24 @@ def main() -> int:
         mimicall_ckpt = (
             _pretrain_ckpt_dir(mimic_all_cohort, PT_PREFIX_MIMICALL) if need_mimicall_pt else None
         )
+        need_ckpt_scenarios = [s for s in selected if s.pretrain_source]
+        if need_ckpt_scenarios and not args.dry_run:
+            for s in need_ckpt_scenarios:
+                src = s.pretrain_source
+                ckpt_path = (
+                    cohort_ckpt
+                    if src == "cohort"
+                    else mimicall_ckpt or _pretrain_ckpt_dir(mimic_all_cohort, PT_PREFIX_MIMICALL)
+                )
+                if ckpt_path is None or not _ckpt_ready(ckpt_path):
+                    print(
+                        f"\nERROR: missing pretrain for {s.key}.\n"
+                        f"  Expected: {ckpt_path}\n"
+                        f"  Run: --phase pretrain-cohort  (or pretrain-mimicall)\n"
+                        f"  Or test without checkpoint: --scenarios none_none\n",
+                        file=sys.stderr,
+                    )
+                    return 1
         for scenario in selected:
             ckpt = _resolve_ckpt(scenario, cohort_ckpt, mimicall_ckpt, mimic_all_cohort, dry_run=args.dry_run)
             run_finetune_scenario(scenario, ckpt, args.fast, args.dry_run)
