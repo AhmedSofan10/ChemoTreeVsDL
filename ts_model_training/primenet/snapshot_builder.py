@@ -105,7 +105,11 @@ def build_fold_tensors(
     data = data.assign(ts_ind=data.hadm_id.map(ts_map))
     train_ind = [ts_map[h] for h in ids["train"] if h in ts_map]
     means_stds = compute_means_stds_df(data, train_ind)
-    label_map = cohort.set_index("hadm_id")["label"].astype(int).to_dict()
+    if "label" in cohort.columns:
+        label_map = cohort.set_index("hadm_id")["label"].astype(int).to_dict()
+    else:
+        # Unlabeled cohorts (e.g. mimic_all SSL pretrain): labels unused for pretrain packs.
+        label_map = {int(h): 0 for h in cohort["hadm_id"].unique()}
 
     def pack(hadm_ids):
         hadm_ids = np.asarray(hadm_ids)

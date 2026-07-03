@@ -1,24 +1,39 @@
 #!/usr/bin/env python3
 """
-Run all STraTS Fig.5-style PrimeNet scenarios on MIMIC-IV NF (5 outer folds).
+Run STraTS Fig.5-style PrimeNet scenarios on MIMIC-IV NF (5 outer folds).
 
-Scenarios (paper column names):
-  cohort/all      — SSL pretrain on NF cohort once → full finetune (5 folds)
-  cohort/final    — same pretrain → finetune with frozen TimeBERT backbone
-  mimic_all/all   — SSL pretrain on all MIMIC admissions → full finetune on NF
-  mimic_all/final — same → frozen backbone finetune
-  none/none       — supervised finetune only (no SSL pretrain)
-  none/final      — supervised finetune, frozen backbone (random init)
+Split into HPC-friendly phases (24h job limit):
+  prepare          — NF cohort + optional mimic_all extraction / 10% subset
+  pretrain-cohort  — SSL on NF cohort only (fold 0)
+  pretrain-mimicall — SSL on mimic_all (or mimic_all_10pct for testing)
+  finetune         — NF finetune scenarios (uses existing checkpoints)
+  collect          — aggregate metrics table
+  all              — legacy: run everything in one job (not recommended on HPC)
+
+Scenarios:
+  cohort_all, cohort_final     — pretrain on NF cohort
+  mimicall_all, mimicall_final — pretrain on mimic_all (or --mimic-all-cohort)
+  none_none, none_final        — supervised only
 
 Examples:
-  # Full matrix (needs MIMIC_IV/saved_data/ + raw MIMIC for mimic_all)
-  python scripts/run_primenet_fig5.py --skip-prepare
+  # Job 1: NF cohort pretrain (~30 min)
+  python scripts/run_primenet_fig5.py --phase pretrain-cohort --skip-prepare
+
+  # Job 2: 10% mimic_all pretrain (pipeline validation)
+  python scripts/subset_mimic_all_cohort.py --frac 0.1
+  python scripts/run_primenet_fig5.py --phase pretrain-mimicall --skip-prepare \\
+      --mimic-all-cohort mimic_all_10pct
+
+  # Job 3: NF finetune (no mimicall scenarios)
+  python scripts/run_primenet_fig5.py --phase finetune --skip-prepare \\
+      --scenarios nf
+
+  # Job 4: mimicall finetune (after mimicall pretrain)
+  python scripts/run_primenet_fig5.py --phase finetune --skip-prepare \\
+      --scenarios mimicall --mimic-all-cohort mimic_all_10pct
 
   # Smoke test
-  python scripts/run_primenet_fig5.py --fast --scenarios none_none
-
-  # Only cohort columns + collect table
-  python scripts/run_primenet_fig5.py --skip-prepare --scenarios cohort_all,cohort_final --collect
+  python scripts/run_primenet_fig5.py --fast --phase finetune --scenarios none_none
 """
 
 from __future__ import annotations
@@ -38,20 +53,42 @@ from config.constants import PROJECT_ROOT
 CONFIG_PATH = PROJECT_ROOT / "config" / "ts_config_params.yaml"
 DATASET = "MIMIC_IV"
 NF_COHORT = "mimic_cohort_NF_30_days"
-MIMIC_ALL_COHORT = "mimic_all"
+DEFAULT_MIMIC_ALL_COHORT = "mimic_all_10pct"
 NUM_FOLDS = 5
 
-# Shared SSL checkpoints (one per pretrain source)
 PT_PREFIX_COHORT = "fig5_pt_cohort"
 PT_PREFIX_MIMIC_ALL = "fig5_pt_mimicall"
 
-# Finetune result prefixes (one per Fig.5 column)
 PREFIX_COHORT_ALL = "fig5_cohort_all"
 PREFIX_COHORT_FINAL = "fig5_cohort_final"
 PREFIX_MIMICALL_ALL = "fig5_mimicall_all"
 PREFIX_MIMICALL_FINAL = "fig5_mimicall_final"
 PREFIX_NONE_NONE = "fig5_none_none"
 PREFIX_NONE_FINAL = "fig5_none_final"
+
+PHASES = (
+    "prepare",
+    "pretrain-cohort",
+    "pretrain-mimicall",
+    "finetune",
+    "collect",
+    "all",
+)
+
+SCENARIO_GROUPS: dict[str, list[str]] = {
+    "nf": ["cohort_all", "cohort_final", "none_none", "none_final"],
+    "mimicall": ["mimicall_all", "mimicall_final"],
+    "all": list(
+        [
+            "cohort_all",
+            "cohort_final",
+            "mimicall_all",
+            "mimicall_final",
+            "none_none",
+            "none_final",
+        ]
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -198,8 +235,8 @@ def extract_mimic_all(dry_run: bool) -> None:
         / DATASET
         / "saved_data"
         / "processed_admission_features_for_ts"
-        / MIMIC_ALL_COHORT
-        / f"{MIMIC_ALL_COHORT}_admissions_labs_14_days_to_ts.csv.gz"
+        / "mimic_all"
+        / "mimic_all_admissions_labs_14_days_to_ts.csv.gz"
     )
     if to_ts.is_file():
         print(f"[skip] mimic_all labs already extracted: {to_ts}")
@@ -221,6 +258,24 @@ ExtractorPretrain(Args())
     _run([sys.executable, "-c", script], dry_run=dry_run)
 
 
+def subset_mimic_all(target: str, frac: float, dry_run: bool) -> None:
+    cohort_path = PROJECT_ROOT / DATASET / "saved_data" / "cohorts" / f"{target}.csv.gz"
+    if cohort_path.is_file():
+        print(f"[skip] subset cohort exists: {cohort_path}")
+        return
+    _run(
+        [
+            sys.executable,
+            "scripts/subset_mimic_all_cohort.py",
+            "--frac",
+            str(frac),
+            "--target",
+            target,
+        ],
+        dry_run=dry_run,
+    )
+
+
 def collect_results(scenarios: list[Scenario], dry_run: bool) -> None:
     cmd = [sys.executable, "scripts/collect_primenet_results.py", "--train-mode", "finetune", "--fig5-table"]
     for s in scenarios:
@@ -229,42 +284,153 @@ def collect_results(scenarios: list[Scenario], dry_run: bool) -> None:
 
 
 def parse_scenarios(raw: str) -> list[Scenario]:
-    if raw.strip().lower() == "all":
-        return list(SCENARIOS.values())
-    keys = [k.strip() for k in raw.split(",") if k.strip()]
+    key = raw.strip().lower()
+    if key in SCENARIO_GROUPS:
+        keys = SCENARIO_GROUPS[key]
+    elif key == "all":
+        keys = SCENARIO_GROUPS["all"]
+    else:
+        keys = [k.strip() for k in raw.split(",") if k.strip()]
     unknown = [k for k in keys if k not in SCENARIOS]
     if unknown:
-        raise SystemExit(f"Unknown scenario(s): {unknown}. Choose from: {list(SCENARIOS)}")
+        raise SystemExit(
+            f"Unknown scenario(s): {unknown}. "
+            f"Keys: {list(SCENARIOS)}; groups: {list(SCENARIO_GROUPS)}"
+        )
     return [SCENARIOS[k] for k in keys]
+
+
+def _resolve_ckpt(
+    scenario: Scenario,
+    cohort_ckpt: Path | None,
+    mimicall_ckpt: Path | None,
+    mimic_all_cohort: str,
+    *,
+    dry_run: bool = False,
+) -> Path | None:
+    if scenario.pretrain_source == "cohort":
+        ckpt = cohort_ckpt or _pretrain_ckpt_dir(NF_COHORT, PT_PREFIX_COHORT)
+    elif scenario.pretrain_source == "mimic_all":
+        ckpt = mimicall_ckpt or _pretrain_ckpt_dir(mimic_all_cohort, PT_PREFIX_MIMIC_ALL)
+    else:
+        return None
+    if dry_run:
+        return ckpt
+    if not _ckpt_ready(ckpt):
+        raise SystemExit(
+            f"Missing pretrain checkpoint for {scenario.key}: {ckpt}\n"
+            f"Run the matching pretrain phase first."
+        )
+    return ckpt
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run PrimeNet Fig.5 scenario matrix (MIMIC-IV NF)")
     parser.add_argument(
-        "--scenarios",
+        "--phase",
         default="all",
-        help="Comma-separated keys or 'all'. Keys: " + ", ".join(SCENARIOS),
+        choices=PHASES,
+        help="Pipeline stage for HPC job splitting (default: all)",
+    )
+    parser.add_argument(
+        "--scenarios",
+        default="nf",
+        help="Comma-separated keys, or group: nf | mimicall | all (default: nf)",
+    )
+    parser.add_argument(
+        "--mimic-all-cohort",
+        default=DEFAULT_MIMIC_ALL_COHORT,
+        help=f"Cohort for mimic_all SSL pretrain (default: {DEFAULT_MIMIC_ALL_COHORT})",
+    )
+    parser.add_argument(
+        "--mimic-all-frac",
+        type=float,
+        default=0.1,
+        help="When building subset, fraction of admissions (default: 0.1)",
     )
     parser.add_argument("--skip-prepare", action="store_true", help="Skip NF cohort prepare_mimic_from_raw")
     parser.add_argument(
         "--skip-extract-mimic-all",
         action="store_true",
-        help="Skip mimic_all lab extraction (requires pre-built saved_data)",
+        help="Skip full mimic_all lab extraction",
+    )
+    parser.add_argument(
+        "--skip-subset-mimic-all",
+        action="store_true",
+        help="Skip auto-building mimic_all subset (use if artifacts already exist)",
     )
     parser.add_argument("--fast", action="store_true", help="Short training (--fast on ts_model_training.main)")
     parser.add_argument("--dry-run", action="store_true", help="Print commands only")
     parser.add_argument("--no-collect", action="store_true", help="Skip collect_primenet_results at the end")
     args = parser.parse_args()
 
+    phase = args.phase
+    mimic_all_cohort = args.mimic_all_cohort
+
+    if phase == "prepare":
+        if not args.skip_prepare:
+            prepare_nf_cohort(args.dry_run)
+        if not args.skip_extract_mimic_all:
+            extract_mimic_all(args.dry_run)
+        if mimic_all_cohort != "mimic_all" and not args.skip_subset_mimic_all:
+            subset_mimic_all(mimic_all_cohort, args.mimic_all_frac, args.dry_run)
+        return 0
+
+    if phase == "pretrain-cohort":
+        if not args.skip_prepare:
+            prepare_nf_cohort(args.dry_run)
+        run_pretrain(NF_COHORT, PT_PREFIX_COHORT, args.fast, args.dry_run)
+        return 0
+
+    if phase == "pretrain-mimicall":
+        if mimic_all_cohort == "mimic_all":
+            if not args.skip_extract_mimic_all:
+                extract_mimic_all(args.dry_run)
+        else:
+            if not args.skip_extract_mimic_all:
+                extract_mimic_all(args.dry_run)
+            if not args.skip_subset_mimic_all:
+                subset_mimic_all(mimic_all_cohort, args.mimic_all_frac, args.dry_run)
+        run_pretrain(mimic_all_cohort, PT_PREFIX_MIMIC_ALL, args.fast, args.dry_run)
+        return 0
+
     selected = parse_scenarios(args.scenarios)
     need_cohort_pt = any(s.pretrain_source == "cohort" for s in selected)
     need_mimicall_pt = any(s.pretrain_source == "mimic_all" for s in selected)
 
+    if phase == "collect":
+        collect_results(selected, args.dry_run)
+        return 0
+
+    if phase == "finetune":
+        cohort_ckpt = _pretrain_ckpt_dir(NF_COHORT, PT_PREFIX_COHORT) if need_cohort_pt else None
+        mimicall_ckpt = (
+            _pretrain_ckpt_dir(mimic_all_cohort, PT_PREFIX_MIMICALL) if need_mimicall_pt else None
+        )
+        for scenario in selected:
+            ckpt = _resolve_ckpt(scenario, cohort_ckpt, mimicall_ckpt, mimic_all_cohort, dry_run=args.dry_run)
+            run_finetune_scenario(scenario, ckpt, args.fast, args.dry_run)
+        if not args.no_collect and not args.dry_run:
+            collect_results(selected, dry_run=False)
+        print("\nDone. Finetune results under:")
+        print(
+            f"  {PROJECT_ROOT / DATASET / 'saved_data' / 'results' / NF_COHORT / 'time_series' / 'finetune' / 'primenet'}"
+        )
+        return 0
+
+    # phase == "all" (monolithic; not recommended on HPC)
     if not args.skip_prepare:
         prepare_nf_cohort(args.dry_run)
 
-    if need_mimicall_pt and not args.skip_extract_mimic_all:
-        extract_mimic_all(args.dry_run)
+    if need_mimicall_pt:
+        if mimic_all_cohort == "mimic_all":
+            if not args.skip_extract_mimic_all:
+                extract_mimic_all(args.dry_run)
+        else:
+            if not args.skip_extract_mimic_all:
+                extract_mimic_all(args.dry_run)
+            if not args.skip_subset_mimic_all:
+                subset_mimic_all(mimic_all_cohort, args.mimic_all_frac, args.dry_run)
 
     cohort_ckpt: Path | None = None
     mimicall_ckpt: Path | None = None
@@ -273,7 +439,7 @@ def main() -> int:
         cohort_ckpt = run_pretrain(NF_COHORT, PT_PREFIX_COHORT, args.fast, args.dry_run)
 
     if need_mimicall_pt:
-        mimicall_ckpt = run_pretrain(MIMIC_ALL_COHORT, PT_PREFIX_MIMICALL, args.fast, args.dry_run)
+        mimicall_ckpt = run_pretrain(mimic_all_cohort, PT_PREFIX_MIMICALL, args.fast, args.dry_run)
 
     for scenario in selected:
         ckpt = None
@@ -287,7 +453,9 @@ def main() -> int:
         collect_results(selected, dry_run=False)
 
     print("\nDone. Finetune results under:")
-    print(f"  {PROJECT_ROOT / DATASET / 'saved_data' / 'results' / NF_COHORT / 'time_series' / 'finetune' / 'primenet'}")
+    print(
+        f"  {PROJECT_ROOT / DATASET / 'saved_data' / 'results' / NF_COHORT / 'time_series' / 'finetune' / 'primenet'}"
+    )
     return 0
 
 
