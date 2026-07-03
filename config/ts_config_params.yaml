@@ -107,6 +107,7 @@ primenet:
   mimic_all:
     max_obs: 512
     days_before_discharge: 14
+    pos_class_weight: 0
     pretrain_tasks: full2
     pretrain_niters: 2000
     finetune_niters: 2000
@@ -126,6 +127,7 @@ primenet:
   mimic_all_10pct:
     max_obs: 512
     days_before_discharge: 14
+    pos_class_weight: 0
     pretrain_tasks: full2
     pretrain_niters: 2000
     finetune_niters: 2000
@@ -145,6 +147,7 @@ primenet:
   mimic_cohort_NF_30_days:
     max_obs: 512
     days_before_discharge: 14
+    pos_class_weight: 0
     pretrain_tasks: full2
     pretrain_niters: 2000
     finetune_niters: 2000

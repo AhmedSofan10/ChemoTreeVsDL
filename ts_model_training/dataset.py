@@ -133,7 +133,10 @@ class TimeSeriesDataset:
             val_pos_freq   = safe_pos_freq(self.y[self.splits['val']])
             test_pos_freq  = safe_pos_freq(self.y[self.splits['test']])
 
-            self.args.pos_class_weight = compute_class_weight(train_pos_freq, self.args.pos_class_weight, self.args.stratify_batch, self.args.train_batch_size)
+            pcw = getattr(self.args, "pos_class_weight", 0)
+            self.args.pos_class_weight = compute_class_weight(
+                train_pos_freq, pcw, self.args.stratify_batch, self.args.train_batch_size
+            )
 
             self.args.logger.write('\npos class weight: ' + str(round(self.args.pos_class_weight, 2)))
             self.args.logger.write('% pos class in train, val, test splits: ' + 
