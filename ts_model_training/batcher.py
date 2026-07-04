@@ -283,7 +283,7 @@ class BatcherD_unsup(Batcher):
     def set_cycler(self):
         return
 
-    def get_batch(self, ind=None):
+    def get_batch(self, ind=None, split=None, **kwargs):
         if self._train_iter is None:
             self._train_iter = iter(self.train_loader)
         try:

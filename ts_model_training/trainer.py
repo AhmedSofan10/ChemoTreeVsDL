@@ -149,10 +149,10 @@ class Trainer:
             self.args.logger.write('\nSaving ckpt at ' + self.model_path_best)
             torch.save(self.model.state_dict(), self.model_path_best)
 
-        # apply inference on test set using best model
-        if self.test_bool:
+        # apply inference on test set using best model (skip for SSL pretrain)
+        if self.test_bool and self.args.train_mode != "pretrain":
             test_batches = self.evaluator.prepare_batches("test")
-            self.tracker.compute_inference_metrics(self.best_model, test_batches) 
+            self.tracker.compute_inference_metrics(self.best_model, test_batches)
         
         losses = {
             "epoch": list(range(1, len(self.train_losses_per_epoch) + 1)),
