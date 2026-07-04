@@ -269,11 +269,12 @@ class BatcherD_unsup(Batcher):
         self.train_loader = dl_meta["train_dataloader"]
         self.val_loader = dl_meta["val_dataloader"]
         self.n_train_batches = dl_meta["n_train_batches"]
-        args.primenet_max_len = dl_meta["max_len"]
+        args.primenet_collator_max_len = dl_meta["max_len"]
         if hasattr(args, "logger"):
             args.logger.write(
                 "PrimeNet pretrain dataloader: "
-                f"max_len={dl_meta['max_len']}, "
+                f"collator_max_len={dl_meta['max_len']}, "
+                f"timebert_max_length={getattr(args, 'primenet_max_len', '?')}, "
                 f"train_batch={dl_meta['train_batch_size']}, "
                 f"eval_batch={dl_meta['eval_batch_size']}"
             )

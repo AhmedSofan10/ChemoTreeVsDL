@@ -190,6 +190,9 @@ class EnvManager:
                 f.read(1)
         except Exception as e:
             raise RuntimeError(f"Error loading PrimeNet checkpoint files: {e}")
+        from ts_model_training.primenet.timebert_adapter import apply_primenet_max_len_for_finetune
+
+        apply_primenet_max_len_for_finetune(self.args)
         self.args.finetune = True
         self.args.train_mode = "finetune"
 
@@ -274,6 +277,12 @@ class EnvManager:
                         f"Missing pretrain checkpoint in {out} "
                         "(checkpoint_best.bin or primenet_pretrain.h5)"
                     )
+            if not supervised_only:
+                from ts_model_training.primenet.timebert_adapter import (
+                    apply_primenet_max_len_for_finetune,
+                )
+
+                apply_primenet_max_len_for_finetune(self.args)
             self.args.train_mode = "finetune"
             self.args.max_epochs = int(mp.get("finetune_niters", 2000))
             self.args.patience = int(

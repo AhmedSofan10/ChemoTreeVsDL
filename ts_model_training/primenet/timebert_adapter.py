@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import pickle
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -31,6 +32,72 @@ def device_from_args(args) -> torch.device:
     if torch.cuda.is_available():
         return torch.device(f"cuda:{dev}")
     return torch.device("cpu")
+
+
+def primenet_seq_len_cap(args) -> int:
+    """TimeBERT ``pos_emb`` size; must match between pretrain checkpoint and finetune."""
+    mp = getattr(args, "model_params", {}) or {}
+    return int(mp.get("max_obs", getattr(args, "max_obs", 512)))
+
+
+def infer_max_len_from_bert_checkpoint(ckpt_path) -> Optional[int]:
+    """Read ``pos_emb`` rows from a saved TimeBERT state dict."""
+    path = Path(ckpt_path)
+    if not path.is_file():
+        return None
+    ckpt = _torch_load(str(path))
+    state = (
+        ckpt["model_state_dict"]
+        if isinstance(ckpt, dict) and "model_state_dict" in ckpt
+        else ckpt
+    )
+    if not isinstance(state, dict):
+        return None
+    weight = state.get("pos_emb.weight")
+    if weight is None:
+        return None
+    return int(weight.shape[0])
+
+
+def load_primenet_saved_variables(path) -> Tuple[Any, Any, int, Optional[int]]:
+    """Load ``primenet_saved_variables.pkl`` (3- or 4-tuple)."""
+    with open(path, "rb") as f:
+        blob = pickle.load(f)
+    if len(blob) == 3:
+        return blob[0], blob[1], blob[2], None
+    if len(blob) >= 4:
+        return blob[0], blob[1], blob[2], blob[3]
+    raise ValueError(f"Unexpected primenet_saved_variables format ({len(blob)} items)")
+
+
+def resolve_primenet_max_len(
+    args,
+    saved_max_len: Optional[int] = None,
+    ckpt_path=None,
+) -> int:
+    """Pick TimeBERT max_length for model construction (not collator padding)."""
+    if saved_max_len is not None:
+        return int(saved_max_len)
+    path = ckpt_path or getattr(args, "pt_dict_path", None)
+    inferred = infer_max_len_from_bert_checkpoint(path) if path else None
+    if inferred is not None:
+        return inferred
+    return primenet_seq_len_cap(args)
+
+
+def apply_primenet_max_len_for_finetune(args) -> int:
+    """Ensure finetune builds TimeBERT with the same max_length as the pretrain ckpt."""
+    saved = None
+    pt_var = getattr(args, "pt_var_path", None)
+    if pt_var and Path(pt_var).is_file():
+        _, _, _, saved = load_primenet_saved_variables(pt_var)
+    max_len = resolve_primenet_max_len(
+        args, saved_max_len=saved, ckpt_path=getattr(args, "pt_dict_path", None)
+    )
+    args.primenet_max_len = max_len
+    if hasattr(args, "logger"):
+        args.logger.write(f"PrimeNet TimeBERT max_length={max_len}")
+    return max_len
 
 
 def primenet_params(args) -> Dict[str, Any]:
@@ -110,6 +177,15 @@ def load_bert_checkpoint(model, ckpt_path: Path) -> None:
         if isinstance(ckpt, dict) and "model_state_dict" in ckpt
         else ckpt
     )
+    ckpt_len = state.get("pos_emb.weight")
+    model_len = model.bert.pos_emb.weight.shape[0]
+    if ckpt_len is not None and int(ckpt_len.shape[0]) != model_len:
+        raise RuntimeError(
+            f"TimeBERT max_length mismatch: model pos_emb={model_len}, "
+            f"checkpoint pos_emb={int(ckpt_len.shape[0])}. "
+            "Re-run pretrain or set args.primenet_max_len to match the checkpoint "
+            "before building the finetune model."
+        )
     model.bert.load_state_dict(state)
 
 
@@ -128,13 +204,18 @@ def eval_pretrain_epoch(model, dataloader, device) -> float:
 
 # Re-export for batcher imports
 __all__ = [
+    "apply_primenet_max_len_for_finetune",
     "build_pretrain_dataloaders",
     "build_pretrain_model",
     "build_classification_model",
     "classification_forward",
     "classification_pooling",
+    "infer_max_len_from_bert_checkpoint",
     "load_bert_checkpoint",
+    "load_primenet_saved_variables",
     "pretrain_forward",
     "eval_pretrain_epoch",
     "primenet_params",
+    "primenet_seq_len_cap",
+    "resolve_primenet_max_len",
 ]

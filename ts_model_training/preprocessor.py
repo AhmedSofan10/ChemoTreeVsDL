@@ -4,6 +4,10 @@ import numpy as np
 import pandas as pd
 from ts_model_training.utils import discrete_tensors, fill_impute, fill_mean, compute_means_stds_df, compute_deltas, compute_holdout
 from ts_model_training.primenet.snapshot_builder import build_fold_tensors
+from ts_model_training.primenet.timebert_adapter import (
+    primenet_seq_len_cap,
+    resolve_primenet_max_len,
+)
 from pathlib import Path
 class Preprocessor:
     def __init__(self, dataset):
@@ -381,7 +385,12 @@ class PreprocessorD(Preprocessor):  # primenet
         pt_var_path = os.path.join(self.args.paths["output_path"], "primenet_saved_variables.pkl")
         with open(pt_var_path, "wb") as f:
             pickle.dump(
-                (self.pt_variables, self.pt_means_stds, self.input_dim),
+                (
+                    self.pt_variables,
+                    self.pt_means_stds,
+                    self.input_dim,
+                    int(self.args.primenet_max_len),
+                ),
                 f,
             )
 
@@ -413,9 +422,13 @@ class PreprocessorD_unsup(PreprocessorD):
             "features": packs["meta"]["features"],
             "ts_to_row": packs["meta"]["ts_to_row"],
         }
+        self.args.primenet_max_len = primenet_seq_len_cap(self.args)
         self.dump_stats()
         self.args.logger.write(
             f"PrimeNet pretrain snapshots: train {pre['X_train'].shape}, val {pre['X_val'].shape}"
+        )
+        self.args.logger.write(
+            f"PrimeNet TimeBERT max_length={self.args.primenet_max_len}"
         )
 
 
@@ -431,9 +444,16 @@ class PreprocessorD_sup(PreprocessorD):
 
     def __init__(self, dataset):
         super().__init__(dataset)
+        self._saved_primenet_max_len = None
         if self._uses_pretrained_stats():
-            with open(self.args.pt_var_path, "rb") as f:
-                self.pt_variables, self.pt_means_stds, self.input_dim = pickle.load(f)
+            from ts_model_training.primenet.timebert_adapter import load_primenet_saved_variables
+
+            (
+                self.pt_variables,
+                self.pt_means_stds,
+                self.input_dim,
+                self._saved_primenet_max_len,
+            ) = load_primenet_saved_variables(self.args.pt_var_path)
 
     def get_vars(self):
         if self._uses_pretrained_stats():
@@ -465,9 +485,17 @@ class PreprocessorD_sup(PreprocessorD):
         }
         if not self._uses_pretrained_stats() and self.args.train_mode != "finetune":
             self.dump_stats()
+        self.args.primenet_max_len = resolve_primenet_max_len(
+            self.args,
+            saved_max_len=self._saved_primenet_max_len,
+            ckpt_path=getattr(self.args, "pt_dict_path", None),
+        )
         self.args.logger.write(
             f"PrimeNet finetune snapshots: train {ft['X_train'].shape}, "
             f"val {ft['X_val'].shape}, test {ft['X_test'].shape}; "
             f"demographics dim={self.dataset.demo.shape[1]}"
+        )
+        self.args.logger.write(
+            f"PrimeNet TimeBERT max_length={self.args.primenet_max_len}"
         )
 

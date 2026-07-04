@@ -20,6 +20,7 @@ from ts_model_training.primenet.timebert_adapter import (
     classification_pooling,
     pretrain_forward,
     primenet_params,
+    primenet_seq_len_cap,
 )
 
 
@@ -36,7 +37,7 @@ class PRIMENET_TS(nn.Module):
 
         self.pretrain = self.train_mode == "pretrain"
         self.finetune = self.train_mode == "finetune"
-        max_len = int(getattr(args, "primenet_max_len", 512))
+        max_len = int(getattr(args, "primenet_max_len", None) or primenet_seq_len_cap(args))
 
         if self.pretrain:
             self.core = build_pretrain_model(args, max_len, self.dim)

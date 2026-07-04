@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import pickle
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from config.constants import PROJECT_ROOT
+from ts_model_training.primenet.timebert_adapter import infer_max_len_from_bert_checkpoint
 
 DATASET = "MIMIC_IV"
 NF = "mimic_cohort_NF_30_days"
@@ -62,6 +64,22 @@ def main() -> int:
         print(f"\nRun cell 5a first, or copy HPC folder:\n  {ckpt}")
         print("\nYou can still test with: --scenarios none_none (no checkpoint needed)")
         return 2
+
+    pkl_path = ckpt / "primenet_saved_variables.pkl"
+    with open(pkl_path, "rb") as f:
+        blob = pickle.load(f)
+    saved_max_len = blob[3] if len(blob) >= 4 else None
+    ckpt_max_len = infer_max_len_from_bert_checkpoint(ckpt / "checkpoint_best.bin")
+    if saved_max_len is not None and ckpt_max_len is not None and int(saved_max_len) != ckpt_max_len:
+        print(
+            "WARNING: primenet_saved_variables max_length "
+            f"({saved_max_len}) != checkpoint pos_emb ({ckpt_max_len}). "
+            "Finetune will use the checkpoint size; consider re-running pretrain."
+        )
+    elif saved_max_len is None and ckpt_max_len is not None:
+        print(
+            f"Note: legacy pretrain pickle (no max_length); finetune will use ckpt size {ckpt_max_len}."
+        )
 
     print("OK — data + pretrain checkpoint ready for full NF finetune.")
     return 0
