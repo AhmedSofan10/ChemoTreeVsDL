@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sys
 import yaml
 
@@ -6,9 +7,13 @@ import yaml
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PRIMENET_DATA_DIR = PROJECT_ROOT / "MIMIC_IV" / "saved_data" / "primenet"
 RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
-MIMIC_DIR = '/home/jovyan/data_common/mimiciv/'
-MIMIC_LABS_DIR = MIMIC_DIR +'hosp/labevents.csv.gz'
-UKER_DIR = '/home/jovyan/data_common/ped-data.db'
+# Raw MIMIC-IV location (dir containing hosp/). Override per-cluster with the
+# MIMIC_DIR env var; keep a trailing slash. Default matches the original setup.
+MIMIC_DIR = os.environ.get("MIMIC_DIR", "/home/jovyan/data_common/mimiciv/")
+if not MIMIC_DIR.endswith("/"):
+    MIMIC_DIR += "/"
+MIMIC_LABS_DIR = MIMIC_DIR + 'hosp/labevents.csv.gz'
+UKER_DIR = os.environ.get("UKER_DIR", "/home/jovyan/data_common/ped-data.db")
 
 
 

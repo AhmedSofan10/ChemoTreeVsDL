@@ -3,7 +3,7 @@
 #
 # HPC (split jobs, 24h limit):
 #   sbatch scripts/hpc/primenet_pretrain_cohort.sh
-#   sbatch scripts/hpc/primenet_pretrain_mimicall_10pct.sh
+#   sbatch scripts/hpc/primenet_pretrain_mimicall.sh
 #   sbatch scripts/hpc/primenet_finetune_nf.sh
 #   sbatch scripts/hpc/primenet_finetune_mimicall.sh
 #

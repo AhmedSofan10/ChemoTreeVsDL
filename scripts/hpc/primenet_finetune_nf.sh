@@ -17,6 +17,11 @@ cd "$ROOT"
 mkdir -p logs
 export PYTHONPATH="${ROOT}${PYTHONPATH:+:$PYTHONPATH}"
 
+# --- Conda environment (adjust CONDA_BASE / module load to your cluster) ---
+CONDA_BASE="$(conda info --base 2>/dev/null || echo "$HOME/miniconda3")"
+source "${CONDA_BASE}/etc/profile.d/conda.sh"
+conda activate flabnet_ml_pipeline_env
+
 ./run_primenet_fig5.sh \
   --phase finetune \
   --skip-prepare \
