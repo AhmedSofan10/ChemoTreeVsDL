@@ -23,11 +23,15 @@ def build_sequences(
     label_map: Dict[int, int],
     max_obs: int,
     max_minutes: float,
+    logger=None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     hadm_ids = np.asarray(hadm_ids)
     d = len(features)
     if hadm_ids.size == 0:
         return np.zeros((0, 1, 2 * d + 1), dtype=np.float32), np.array([], dtype=np.int64)
+
+    if logger is not None:
+        logger.write(f"\nbuild_sequences: starting on {hadm_ids.size} admissions")
 
     var_to_ind = {v: i for i, v in enumerate(features)}
     tensors = []
@@ -38,17 +42,28 @@ def build_sequences(
     sub["value"] = (sub["value"] - sub["mean"]) / sub["std"]
     sub = sub.groupby(["hadm_id", "minute", "itemid"]).value.mean().reset_index()
 
-    for hadm_id in hadm_ids:
-        grp = sub.loc[sub.hadm_id == hadm_id]
-        if grp.empty:
+    # Group once up front instead of re-scanning 
+    admission_groups = {k: g for k, g in sub.groupby("hadm_id")}
+    if logger is not None:
+        logger.write(f"build_sequences: grouped rows for {len(admission_groups)} admissions, building tensors...")
+
+    progress_every = max(1, hadm_ids.size // 10)
+    for i, hadm_id in enumerate(hadm_ids):
+        if logger is not None and i > 0 and i % progress_every == 0:
+            logger.write(f"build_sequences: {i}/{hadm_ids.size} admissions processed")
+        grp = admission_groups.get(hadm_id)
+        if grp is None or grp.empty:
             continue
         times = sorted(grp["minute"].unique())
         if len(times) > max_obs:
             rng = np.random.default_rng(int(hadm_id) % (2**31))
             times = sorted(rng.choice(times, size=max_obs, replace=False))
+        minute_groups = {k: g for k, g in grp.groupby("minute")}
         rows = []
         for t in times:
-            t_grp = grp.loc[grp.minute == t]
+            t_grp = minute_groups.get(t)
+            if t_grp is None:
+                continue
             vals = np.zeros(d, dtype=np.float32)
             mask = np.zeros(d, dtype=np.float32)
             for row in t_grp.itertuples():
@@ -71,6 +86,8 @@ def build_sequences(
     out = np.zeros((len(tensors), max_len, 2 * d + 1), dtype=np.float32)
     for i, seq in enumerate(tensors):
         out[i, : seq.shape[0]] = seq
+    if logger is not None:
+        logger.write(f"build_sequences: done, built {out.shape}")
     return out, np.array(labels, dtype=np.int64)
 
 
@@ -91,15 +108,17 @@ def build_fold_tensors(
     test_ids: np.ndarray,
     max_obs: int,
     days_before_discharge: int,
+    pretrain_only: bool = False,
+    logger=None,
 ) -> Dict[str, Dict[str, np.ndarray]]:
     max_minutes = float((days_before_discharge + 1) * 24 * 60)
     data, ids = ids_in_data(
         data,
         {"train": train_ids, "val": val_ids, "test": test_ids, "sup_ids": None},
-        logger=None,
+        logger=logger,
     )
     ids["sup_ids"] = np.concatenate([ids["train"], ids["val"], ids["test"]])
-    data = remove_features_not_in_train(data, ids["train"], logger=None)
+    data = remove_features_not_in_train(data, ids["train"], logger=logger)
 
     ts_map = {h: i for i, h in enumerate(ids["sup_ids"])}
     data = data.assign(ts_ind=data.hadm_id.map(ts_map))
@@ -127,7 +146,41 @@ def build_fold_tensors(
             label_map,
             max_obs,
             max_minutes,
+            logger=logger,
         )
+
+    meta = {
+        "features": features,
+        "means_stds": means_stds,
+        "input_dim": len(features),
+        "ts_map": ts_map,
+        "train_hadm_ids": np.array(ids["train"]),
+        "val_hadm_ids": np.array(ids["val"]),
+        "test_hadm_ids": np.array(ids["test"]),
+    }
+
+    if pretrain_only:
+        # Split ids before building dense tensors, so the pooled "pretrain" arrays (the only
+        # split SSL pretrain uses) are built once instead of per-split then concatenated,
+        # which OOMed on the full mimic_all cohort.
+        pre_train_ids, pre_val_ids = train_test_split(
+            ids["sup_ids"], test_size=0.2, random_state=42
+        )
+        if logger is not None:
+            logger.write(f"\nbuild_fold_tensors: building pretrain train split ({len(pre_train_ids)} admissions)")
+        X_pre, _ = pack(pre_train_ids)
+        if logger is not None:
+            logger.write(f"build_fold_tensors: building pretrain val split ({len(pre_val_ids)} admissions)")
+        X_pre_val, _ = pack(pre_val_ids)
+        max_len = max(X_pre.shape[1], X_pre_val.shape[1])
+        X_pre = pad_seq_len(X_pre, max_len)
+        X_pre_val = pad_seq_len(X_pre_val, max_len)
+        if logger is not None:
+            logger.write(f"build_fold_tensors: pretrain packs done, train {X_pre.shape}, val {X_pre_val.shape}")
+        return {
+            "pretrain": {"X_train": X_pre, "X_val": X_pre_val},
+            "meta": meta,
+        }
 
     X_train, y_train = pack(ids["train"])
     X_val, y_val = pack(ids["val"])
@@ -153,13 +206,5 @@ def build_fold_tensors(
             "y_test": y_test,
         },
         "pretrain": {"X_train": X_pre, "X_val": X_pre_val},
-        "meta": {
-            "features": features,
-            "means_stds": means_stds,
-            "input_dim": len(features),
-            "ts_map": ts_map,
-            "train_hadm_ids": np.array(ids["train"]),
-            "val_hadm_ids": np.array(ids["val"]),
-            "test_hadm_ids": np.array(ids["test"]),
-        },
+        "meta": meta,
     }

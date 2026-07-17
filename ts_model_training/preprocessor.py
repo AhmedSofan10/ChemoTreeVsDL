@@ -54,12 +54,12 @@ class Preprocessor:
         } # if the task is supervised, save also the target
         if self.args.train_mode != "pretrain":
             self.input_dict["target"] = self.dataset.y
-            
-        # pickle dump only if not training in nested crossvalidation
-        if not (self.args.cv_mode == "grid"): #self.args.grid == "nested" and 
-            output_path = Path(self.dataset.args.paths["output_path"]) / "input_dict.pkl"
-            with open(output_path, "wb") as f:
-                pickle.dump(self.input_dict, f)
+
+        # do not save input dict
+        # if not (self.args.cv_mode == "grid"): #self.args.grid == "nested" and
+        #     output_path = Path(self.dataset.args.paths["output_path"]) / "input_dict.pkl"
+        #     with open(output_path, "wb") as f:
+        #         pickle.dump(self.input_dict, f)
 
 
 class PreprocessorA(Preprocessor):
@@ -356,7 +356,7 @@ class PreprocessorD(Preprocessor):  # primenet
     def _max_obs(self):
         return int(getattr(self.args, "model_params", {}).get("max_obs", getattr(self.args, "max_obs", 512)))
 
-    def _build_packs(self):
+    def _build_packs(self, pretrain_only: bool = False):
         self.trim()
         packs = build_fold_tensors(
             self.dataset.cohort,
@@ -367,6 +367,8 @@ class PreprocessorD(Preprocessor):  # primenet
             self.args.ids["test"],
             self._max_obs(),
             self.args.days_before_discharge,
+            pretrain_only=pretrain_only,
+            logger=self.args.logger,
         )
         meta = packs["meta"]
         ts_map = meta["ts_map"]
@@ -410,14 +412,15 @@ class PreprocessorD_unsup(PreprocessorD):
         self.set_variables()
         self.pt_means_stds = compute_means_stds_df(self.data, self.train_ind)
         self.pt_variables = self.variables
-        packs = self._build_packs()
-        ft = packs["finetune"]
+        # pretrain_only=True: BatcherD_unsup only ever reads input_dict["pretrain"],
+        # so skip building the (unused) labeled "finetune" train/val/test tensors —
+        # that duplication was the source of repeated OOMs on the full mimic_all cohort.
+        packs = self._build_packs(pretrain_only=True)
         pre = packs["pretrain"]
         self.input_dim = packs["meta"]["input_dim"]
         self.args.input_dim = self.input_dim
         self.input_dict = {
             "pretrain": pre,
-            "finetune": ft,
             "input_dim": self.input_dim,
             "features": packs["meta"]["features"],
             "ts_to_row": packs["meta"]["ts_to_row"],
