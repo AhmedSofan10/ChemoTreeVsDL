@@ -405,7 +405,7 @@ def main() -> int:
     if phase == "finetune":
         cohort_ckpt = _pretrain_ckpt_dir(NF_COHORT, PT_PREFIX_COHORT) if need_cohort_pt else None
         mimicall_ckpt = (
-            _pretrain_ckpt_dir(mimic_all_cohort, PT_PREFIX_MIMICALL) if need_mimicall_pt else None
+            _pretrain_ckpt_dir(mimic_all_cohort, PT_PREFIX_MIMIC_ALL) if need_mimicall_pt else None
         )
         need_ckpt_scenarios = [s for s in selected if s.pretrain_source]
         if need_ckpt_scenarios and not args.dry_run:
@@ -414,7 +414,7 @@ def main() -> int:
                 ckpt_path = (
                     cohort_ckpt
                     if src == "cohort"
-                    else mimicall_ckpt or _pretrain_ckpt_dir(mimic_all_cohort, PT_PREFIX_MIMICALL)
+                    else mimicall_ckpt or _pretrain_ckpt_dir(mimic_all_cohort, PT_PREFIX_MIMIC_ALL)
                 )
                 if ckpt_path is None or not _ckpt_ready(ckpt_path):
                     print(
@@ -457,7 +457,7 @@ def main() -> int:
         cohort_ckpt = run_pretrain(NF_COHORT, PT_PREFIX_COHORT, args.fast, args.dry_run)
 
     if need_mimicall_pt:
-        mimicall_ckpt = run_pretrain(mimic_all_cohort, PT_PREFIX_MIMICALL, args.fast, args.dry_run)
+        mimicall_ckpt = run_pretrain(mimic_all_cohort, PT_PREFIX_MIMIC_ALL, args.fast, args.dry_run)
 
     for scenario in selected:
         ckpt = None
