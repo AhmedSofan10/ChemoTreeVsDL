@@ -139,10 +139,14 @@ def build_pretrain_dataloaders(
     }
 
 
-def eval_pretrain_loader(model, dataloader, device) -> float:
-    """Contrastive-learning accuracy on a pretrain validation loader."""
+def eval_pretrain_loader(model, dataloader, device) -> Dict[str, float]:
+    """Validation loss and contrastive-matching accuracy on a pretrain validation loader.
+    Eval batch size is 1, so val_acc is always 1.0 (trivial 1x1 match) — use
+    `loss` for checkpoint selection instead.
+    """
     model.eval()
     correct, total = 0.0, 0.0
+    loss_sum, weight_sum = 0.0, 0.0
     with torch.no_grad():
         for batch in dataloader:
             value_batch = batch["value"].to(device)
@@ -152,8 +156,13 @@ def eval_pretrain_loader(model, dataloader, device) -> float:
             out = model(x_batch, time_batch)
             correct += out["correct_num"]
             total += out["total_num"]
+            loss_sum += out["loss"].item() * out["total_num"]
+            weight_sum += out["total_num"]
             if getattr(device, "type", str(device)) == "cuda" or str(device).startswith(
                 "cuda"
             ):
                 torch.cuda.empty_cache()
-    return float(correct / total) if total else 0.0
+    return {
+        "loss": loss_sum / weight_sum if weight_sum else None,
+        "val_acc": float(correct / total) if total else 0.0,
+    }

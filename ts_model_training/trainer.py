@@ -269,8 +269,9 @@ class Trainer:
             # Determine current validation metric
             if self.args.criterion == "auc":
                 curr_val_metric = val_res['auprc'] + val_res['auroc']
-            elif self.args.model_type == "primenet" and self.args.train_mode == "pretrain":
-                curr_val_metric = val_res.get("val_acc", 0.0)
+            # primnet also use the val_loss for early stopping
+            #elif self.args.model_type == "primenet" and self.args.train_mode == "pretrain":
+            #    curr_val_metric = val_res.get("val_acc", 0.0)
             else:  # default is loss
                 curr_val_metric = -val_res['loss']
 

@@ -198,7 +198,7 @@ def pretrain_forward(model, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tenso
     return out["loss"], None
 
 
-def eval_pretrain_epoch(model, dataloader, device) -> float:
+def eval_pretrain_epoch(model, dataloader, device) -> dict: # float to dict since we have return loss + val_acc
     return eval_pretrain_loader(model, dataloader, device)
 
 
