@@ -38,7 +38,8 @@ def build_sequences(
     labels = []
 
     sub = data.loc[data.hadm_id.isin(hadm_ids)].copy()
-    sub = sub.merge(means_stds, on="itemid", how="left")
+    ms = means_stds.reset_index() if "itemid" not in means_stds.columns else means_stds
+    sub = sub.merge(ms, on="itemid", how="left")
     sub["value"] = (sub["value"] - sub["mean"]) / sub["std"]
     sub = sub.groupby(["hadm_id", "minute", "itemid"]).value.mean().reset_index()
 

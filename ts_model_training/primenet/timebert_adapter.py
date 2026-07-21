@@ -59,15 +59,128 @@ def infer_max_len_from_bert_checkpoint(ckpt_path) -> Optional[int]:
     return int(weight.shape[0])
 
 
+def _means_stds_to_dataframe(means_stds: Any):
+    """Rebuild means/stds as DataFrame with index=itemid, columns mean/std."""
+    import pandas as pd
+
+    def _key(x):
+        s = str(x)
+        return int(x) if s.lstrip("-").isdigit() else x
+
+    if isinstance(means_stds, dict):
+        rows = {
+            _key(itemid): {"mean": float(stats["mean"]), "std": float(stats["std"])}
+            for itemid, stats in means_stds.items()
+        }
+        df = pd.DataFrame.from_dict(rows, orient="index")
+        df.index.name = "itemid"
+        return df[["mean", "std"]]
+
+    if isinstance(means_stds, pd.DataFrame):
+        df = means_stds.copy()
+        if "itemid" in df.columns:
+            df = df.set_index("itemid")
+        df.index = [_key(x) for x in df.index]
+        df.index.name = "itemid"
+        df["mean"] = df["mean"].astype(float)
+        df["std"] = df["std"].astype(float)
+        return df[["mean", "std"]]
+
+    raise TypeError(f"Unsupported means_stds type: {type(means_stds)}")
+
+
+def dump_primenet_saved_variables(
+    path,
+    pt_variables: Any,
+    pt_means_stds: Any,
+    input_dim: int,
+    max_len: int,
+) -> None:
+    """Write stats in a pandas-version-portable format (dict + plain lists)."""
+    import pandas as pd
+
+    variables = list(pt_variables)
+    variables = [
+        int(v) if not isinstance(v, str) or str(v).lstrip("-").isdigit() else v
+        for v in variables
+    ]
+
+    if isinstance(pt_means_stds, dict):
+        means_dict = {
+            int(k) if str(k).lstrip("-").isdigit() else k: {
+                "mean": float(v["mean"]),
+                "std": float(v["std"]),
+            }
+            for k, v in pt_means_stds.items()
+        }
+    else:
+        df = pt_means_stds
+        if isinstance(df, pd.DataFrame):
+            if "itemid" in df.columns:
+                it = df["itemid"]
+                means = df["mean"]
+                stds = df["std"]
+            else:
+                it = df.index
+                means = df["mean"]
+                stds = df["std"]
+            means_dict = {}
+            for itemid, mean, std in zip(it, means, stds):
+                key = int(itemid) if str(itemid).lstrip("-").isdigit() else itemid
+                means_dict[key] = {"mean": float(mean), "std": float(std)}
+        else:
+            raise TypeError(f"Unsupported means_stds type for dump: {type(pt_means_stds)}")
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:
+        pickle.dump(
+            {
+                "format": "primenet_stats_v2",
+                "variables": variables,
+                "means_stds": means_dict,
+                "input_dim": int(input_dim),
+                "max_len": int(max_len),
+            },
+            f,
+            protocol=4,
+        )
+
+
 def load_primenet_saved_variables(path) -> Tuple[Any, Any, int, Optional[int]]:
-    """Load ``primenet_saved_variables.pkl`` (3- or 4-tuple)."""
-    with open(path, "rb") as f:
-        blob = pickle.load(f)
+    """Load ``primenet_saved_variables.pkl`` (legacy tuple or portable v2 dict)."""
+    path = Path(path)
+    try:
+        with open(path, "rb") as f:
+            blob = pickle.load(f)
+    except TypeError as e:
+        # Classic symptom: HPC pandas>=2.3 StringDtype vs Colab pandas<2.3
+        raise RuntimeError(
+            f"Failed to unpickle {path} ({e}). "
+            "Usually a pandas version mismatch (need pandas>=2.3.0 to read HPC pickles). "
+            "Fix: pip install -U 'pandas>=2.3.0' then re-run finetune "
+            "(or re-export primenet_saved_variables with dump_primenet_saved_variables)."
+        ) from e
+
+    if isinstance(blob, dict) and blob.get("format") == "primenet_stats_v2":
+        variables = list(blob["variables"])
+        means_stds = _means_stds_to_dataframe(blob["means_stds"])
+        return variables, means_stds, int(blob["input_dim"]), int(blob["max_len"])
+
+    if not isinstance(blob, (tuple, list)):
+        raise ValueError(f"Unexpected primenet_saved_variables type: {type(blob)}")
+
     if len(blob) == 3:
-        return blob[0], blob[1], blob[2], None
-    if len(blob) >= 4:
-        return blob[0], blob[1], blob[2], blob[3]
-    raise ValueError(f"Unexpected primenet_saved_variables format ({len(blob)} items)")
+        variables, means_stds, input_dim = blob
+        max_len = None
+    elif len(blob) >= 4:
+        variables, means_stds, input_dim, max_len = blob[0], blob[1], blob[2], blob[3]
+    else:
+        raise ValueError(f"Unexpected primenet_saved_variables format ({len(blob)} items)")
+
+    variables = list(variables)
+    means_stds = _means_stds_to_dataframe(means_stds)
+    return variables, means_stds, int(input_dim), (None if max_len is None else int(max_len))
 
 
 def resolve_primenet_max_len(
@@ -210,6 +323,7 @@ __all__ = [
     "build_classification_model",
     "classification_forward",
     "classification_pooling",
+    "dump_primenet_saved_variables",
     "infer_max_len_from_bert_checkpoint",
     "load_bert_checkpoint",
     "load_primenet_saved_variables",

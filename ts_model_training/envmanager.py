@@ -184,13 +184,16 @@ class EnvManager:
                 "(expected checkpoint_best.bin or primenet_pretrain.h5)"
             )
         try:
-            with open(self.args.pt_var_path, "rb") as f:
-                pickle.load(f)
+            from ts_model_training.primenet.timebert_adapter import (
+                apply_primenet_max_len_for_finetune,
+                load_primenet_saved_variables,
+            )
+
+            load_primenet_saved_variables(self.args.pt_var_path)
             with open(self.args.pt_dict_path, "rb") as f:
                 f.read(1)
         except Exception as e:
-            raise RuntimeError(f"Error loading PrimeNet checkpoint files: {e}")
-        from ts_model_training.primenet.timebert_adapter import apply_primenet_max_len_for_finetune
+            raise RuntimeError(f"Error loading PrimeNet checkpoint files: {e}") from e
 
         apply_primenet_max_len_for_finetune(self.args)
         self.args.finetune = True

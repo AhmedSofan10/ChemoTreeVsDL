@@ -384,17 +384,16 @@ class PreprocessorD(Preprocessor):  # primenet
         return packs
 
     def dump_stats(self):
+        from ts_model_training.primenet.timebert_adapter import dump_primenet_saved_variables
+
         pt_var_path = os.path.join(self.args.paths["output_path"], "primenet_saved_variables.pkl")
-        with open(pt_var_path, "wb") as f:
-            pickle.dump(
-                (
-                    self.pt_variables,
-                    self.pt_means_stds,
-                    self.input_dim,
-                    int(self.args.primenet_max_len),
-                ),
-                f,
-            )
+        dump_primenet_saved_variables(
+            pt_var_path,
+            self.pt_variables,
+            self.pt_means_stds,
+            self.input_dim,
+            int(self.args.primenet_max_len),
+        )
 
 
 class PreprocessorD_unsup(PreprocessorD):
