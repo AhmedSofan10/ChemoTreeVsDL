@@ -8,7 +8,7 @@ PrimeNet ([Roy Chowdhury et al., AAAI 2023](https://github.com/ranakroychowdhury
 - `ts_model_training/ts_models/ts_primenet.py` — `PRIMENET_TS` model (parallel to `STRATS_TS`)
 - `ts_model_training/primenet/` — snapshot builder, export, metrics
 - `colab_primenet_train.py` — Google Colab entry point
-- `notebooks/primenet_mimic_iv_colab.ipynb` — Colab notebook
+- `notebooks/primenet_mimic_iv_colab.ipynb` — Colab notebook (mimic_all finetune; upload/URL/prepare, no Drive)
 - `scripts/prepare_mimic_from_raw.py` — build `MIMIC_IV/saved_data/` from `data/raw/`
 
 Attribution: see `ts_model_training/primenet/timebert/ATTRIBUTION.md`.
@@ -83,21 +83,25 @@ python -m ts_model_training.main \
 
 ## Colab
 
-Open `notebooks/primenet_mimic_iv_colab.ipynb` on the `primenet` branch, or run from the repo root:
+Open `notebooks/primenet_mimic_iv_colab.ipynb` on the `primenet` branch (no Google Drive).
+
+Typical use now: place the HPC `mimic_all` pretrain checkpoint + NF `saved_data` via **browser upload**, **HTTPS URL**, or **raw CSV prepare**, then finetune `mimicall` scenarios. Results download as a zip.
+
+Or run from the repo root:
 
 ```bash
 pip install -r requirements-colab.txt
 export PYTHONPATH="$(pwd)"
 
-# Fig.5 phased pipeline (recommended)
+# Fig.5 phased pipeline
 python colab_primenet_fig5.py --phase pretrain-cohort --fast --skip-prepare
 python colab_primenet_fig5.py --phase finetune --scenarios nf --fast --skip-prepare
+python colab_primenet_fig5.py --phase finetune --scenarios mimicall \
+  --mimic-all-cohort mimic_all --skip-prepare --skip-extract-mimic-all
 
 # Legacy single-fold smoke test
 python colab_primenet_train.py --fold 0 --fast
 ```
-
-Upload NF CSVs to `data/raw/` or copy `MIMIC_IV/saved_data/` from Drive (e.g. HPC checkpoint). Run one phase per Colab session for long jobs; enable **Save to Drive** in the notebook to persist checkpoints between sessions.
 
 ## Scope (v1)
 
