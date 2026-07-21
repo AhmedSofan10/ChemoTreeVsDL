@@ -129,14 +129,19 @@ def _env() -> dict[str, str]:
     env = os.environ.copy()
     root = str(PROJECT_ROOT)
     env["PYTHONPATH"] = root + os.pathsep + env.get("PYTHONPATH", "")
+    # Colab/notebooks capture subprocess stdout as a pipe → block buffering hides logs.
+    env["PYTHONUNBUFFERED"] = "1"
+    env["PYTHONFAULTHANDLER"] = "1"
     return env
 
 
 def _run(cmd: list[str], dry_run: bool = False) -> None:
+    # Force unbuffered child Python when invoking the interpreter directly.
+    if cmd and Path(cmd[0]).name.startswith("python") and "-u" not in cmd[:3]:
+        cmd = [cmd[0], "-u", *cmd[1:]]
     print("+", " ".join(cmd), flush=True)
     if not dry_run:
         subprocess.check_call(cmd, env=_env(), cwd=PROJECT_ROOT)
-
 
 def _pretrain_ckpt_dir(cohort: str, prefix: str) -> Path:
     return (
