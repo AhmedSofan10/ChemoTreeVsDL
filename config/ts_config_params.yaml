@@ -164,3 +164,23 @@ primenet:
     seed: 0
     segment_num: 3
     mask_ratio_per_seg: 0.05
+  mimic_cohort_aplasia_45_days:
+    max_obs: 512
+    days_before_discharge: 14
+    pos_class_weight: 0
+    pretrain_tasks: full2
+    pretrain_niters: 2000
+    finetune_niters: 2000
+    batch_size: 16
+    pretrain_batch_cap: 16
+    rec_hidden: 128
+    embed_time: 128
+    num_heads: 1
+    lr: 0.0001
+    pretrain_pooling: bert
+    finetune_pooling: ave
+    patience: 10
+    finetune_patience: 20
+    seed: 0
+    segment_num: 3
+    mask_ratio_per_seg: 0.05
