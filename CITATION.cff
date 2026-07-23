@@ -13,8 +13,11 @@ authors:
     affiliation: Friedrich-Alexander-Universität Erlangen-Nürnberg
 repository-code: "https://github.com/AhmedSofan10/ChemoTreeVsDL"
 url: "https://github.com/AhmedSofan10/ChemoTreeVsDL/tree/primenet"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.21517469"
 license: MIT
-version: "0.1.0-primenet"
+version: "v0.1.1-primenet"
 date-released: "2026-07-23"
 keywords:
   - irregular time series

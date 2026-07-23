@@ -2,6 +2,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21517469.svg)](https://doi.org/10.5281/zenodo.21517469)
 [![Code style: branch](https://img.shields.io/badge/branch-primenet-informational)](https://github.com/AhmedSofan10/ChemoTreeVsDL/tree/primenet)
 
 **Fork of [bionetslab/ChemoTreeVsDL](https://github.com/bionetslab/ChemoTreeVsDL) (FLabBench / ChemoTree)** with a **native PrimeNet (TimeBERT)** integration for irregular laboratory time series.
@@ -158,8 +159,10 @@ If you use this fork / PrimeNet integration:
   author  = {Sofan, Ahmed},
   title   = {ChemoTreeVsDL with PrimeNet (TimeBERT) for MIMIC-IV NF and aplasia},
   year    = {2026},
-  url     = {https://github.com/AhmedSofan10/ChemoTreeVsDL},
-  version = {primenet},
+  publisher = {Zenodo},
+  version = {v0.1.1-primenet},
+  doi     = {10.5281/zenodo.21517469},
+  url     = {https://doi.org/10.5281/zenodo.21517469},
   note    = {Fork of bionetslab/ChemoTreeVsDL (FLabBench)}
 }
 ```
