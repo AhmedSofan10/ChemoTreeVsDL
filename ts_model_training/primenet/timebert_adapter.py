@@ -60,12 +60,12 @@ def infer_max_len_from_bert_checkpoint(ckpt_path) -> Optional[int]:
 
 
 def _means_stds_to_dataframe(means_stds: Any):
-    """Rebuild means/stds as DataFrame with index=itemid, columns mean/std."""
+    """Rebuild means/stds as DataFrame with index=itemid (str), columns mean/std."""
     import pandas as pd
 
     def _key(x):
-        s = str(x)
-        return int(x) if s.lstrip("-").isdigit() else x
+        # Keep as str to match CSV itemid dtype='string' in TimeSeriesDataset.
+        return str(x)
 
     if isinstance(means_stds, dict):
         rows = {
@@ -99,15 +99,11 @@ def dump_primenet_saved_variables(
     """Write stats in a pandas-version-portable format (dict + plain lists)."""
     import pandas as pd
 
-    variables = list(pt_variables)
-    variables = [
-        int(v) if not isinstance(v, str) or str(v).lstrip("-").isdigit() else v
-        for v in variables
-    ]
+    variables = [str(v) for v in list(pt_variables)]
 
     if isinstance(pt_means_stds, dict):
         means_dict = {
-            int(k) if str(k).lstrip("-").isdigit() else k: {
+            str(k): {
                 "mean": float(v["mean"]),
                 "std": float(v["std"]),
             }
@@ -126,8 +122,7 @@ def dump_primenet_saved_variables(
                 stds = df["std"]
             means_dict = {}
             for itemid, mean, std in zip(it, means, stds):
-                key = int(itemid) if str(itemid).lstrip("-").isdigit() else itemid
-                means_dict[key] = {"mean": float(mean), "std": float(std)}
+                means_dict[str(itemid)] = {"mean": float(mean), "std": float(std)}
         else:
             raise TypeError(f"Unsupported means_stds type for dump: {type(pt_means_stds)}")
 
@@ -163,7 +158,7 @@ def load_primenet_saved_variables(path) -> Tuple[Any, Any, int, Optional[int]]:
         ) from e
 
     if isinstance(blob, dict) and blob.get("format") == "primenet_stats_v2":
-        variables = list(blob["variables"])
+        variables = [str(v) for v in list(blob["variables"])]
         means_stds = _means_stds_to_dataframe(blob["means_stds"])
         return variables, means_stds, int(blob["input_dim"]), int(blob["max_len"])
 
@@ -178,7 +173,7 @@ def load_primenet_saved_variables(path) -> Tuple[Any, Any, int, Optional[int]]:
     else:
         raise ValueError(f"Unexpected primenet_saved_variables format ({len(blob)} items)")
 
-    variables = list(variables)
+    variables = [str(v) for v in list(variables)]
     means_stds = _means_stds_to_dataframe(means_stds)
     return variables, means_stds, int(input_dim), (None if max_len is None else int(max_len))
 

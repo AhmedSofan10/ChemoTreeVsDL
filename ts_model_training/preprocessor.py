@@ -23,8 +23,9 @@ class Preprocessor:
         self.data = self.data[self.data.itemid.isin(self.variables)]
         self.data["var_ind"] = self.data.itemid.map(self.var_to_ind)
         self.args.V = len(self.variables)
-        self.args.logger.write('\nTemporal variables: ' + ', '.join(self.variables))
-
+        self.args.logger.write(
+            "\nTemporal variables: " + ", ".join(str(v) for v in self.variables)
+        )
     def get_vars(self):
         return sorted(self.data.itemid.unique())
 
@@ -459,8 +460,9 @@ class PreprocessorD_sup(PreprocessorD):
 
     def get_vars(self):
         if self._uses_pretrained_stats():
-            return self.pt_variables
-        return sorted(self.data.itemid.unique())
+            # Match dataset itemid dtype ('string') so isin / merge work.
+            return [str(v) for v in self.pt_variables]
+        return sorted(self.data.itemid.astype(str).unique())
 
     def compute_means_stds(self):
         if self._uses_pretrained_stats():
