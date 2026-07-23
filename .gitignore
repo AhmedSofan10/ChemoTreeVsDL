@@ -1,30 +1,52 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.DS_Store
-.vscode/
-.idea/
 *.egg-info/
 dist/
 build/
 .pytest_cache/
 .coverage
 htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# Environments
 venv/
 env/
 .venv/
+
+# Runtime outputs (never commit)
 outputs/
+logs/
+*.pt
+*.pth
+*.h5
+*.bin
+!supporting_files/*.pkl
+
+# Credentialed / large data
 MIMIC_IV/saved_data/
 UKEr/saved_data/
 data/raw/*
 !data/raw/.gitkeep
-*.pt
-*.pth
-*.h5
-logs/
+mimic_cohort_*.csv
+*.csv.gz
+!supporting_files/*.csv
 
-# Accidental nested clone (old third_party PrimeNet tree)
+# Accidental nested clone
 ChemoTreeVsDL/
 
-# Local cohort uploads (use data/raw/ instead)
-mimic_cohort_*.csv
+# Notebooks noise
+.ipynb_checkpoints/
+
+# Local progress zips
+*_progress*.zip
+*_saved_data.zip

@@ -1,0 +1,47 @@
+{
+  "title": "ChemoTreeVsDL with PrimeNet (TimeBERT) for MIMIC-IV neutropenic fever and aplasia",
+  "description": "Fork of bionetslab/ChemoTreeVsDL (FLabBench/ChemoTree) with native PrimeNet/TimeBERT integration and STraTS Fig. 5-style pretrain-finetune orchestration for chemotherapy side-effect prediction from irregular laboratory time series on MIMIC-IV.",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "mit",
+  "creators": [
+    {
+      "name": "Sofan, Ahmed",
+      "affiliation": "Friedrich-Alexander-Universität Erlangen-Nürnberg"
+    }
+  ],
+  "keywords": [
+    "irregular time series",
+    "self-supervised learning",
+    "PrimeNet",
+    "TimeBERT",
+    "STraTS",
+    "MIMIC-IV",
+    "neutropenic fever",
+    "aplasia",
+    "ChemoTree",
+    "FLabBench"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.64898/2025.12.12.25342142",
+      "relation": "isSupplementTo",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.1609/aaai.v37i6.25876",
+      "relation": "cites",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "https://github.com/bionetslab/ChemoTreeVsDL",
+      "relation": "isDerivedFrom",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://github.com/AhmedSofan10/ChemoTreeVsDL",
+      "relation": "isIdenticalTo",
+      "scheme": "url"
+    }
+  ]
+}

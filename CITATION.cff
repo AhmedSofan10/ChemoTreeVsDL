@@ -1,0 +1,62 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "ChemoTreeVsDL with PrimeNet (TimeBERT) for MIMIC-IV neutropenic fever and aplasia"
+abstract: >-
+  Fork of the ChemoTree / FLabBench pipeline (bionetslab/ChemoTreeVsDL) with a
+  native PrimeNet/TimeBERT integration and STraTS Fig. 5-style pretrain–finetune
+  orchestration for chemotherapy side-effect prediction from irregular laboratory
+  time series on MIMIC-IV.
+authors:
+  - family-names: Sofan
+    given-names: Ahmed
+    affiliation: Friedrich-Alexander-Universität Erlangen-Nürnberg
+repository-code: "https://github.com/AhmedSofan10/ChemoTreeVsDL"
+url: "https://github.com/AhmedSofan10/ChemoTreeVsDL/tree/primenet"
+license: MIT
+version: "0.1.0-primenet"
+date-released: "2026-07-23"
+keywords:
+  - irregular time series
+  - self-supervised learning
+  - PrimeNet
+  - TimeBERT
+  - STraTS
+  - MIMIC-IV
+  - neutropenic fever
+  - aplasia
+  - ChemoTree
+  - FLabBench
+references:
+  - type: article
+    title: "Non-temporal tree-based models outperform temporal deep learning models in the prediction of chemotherapy-induced side effects from longitudinal laboratory data"
+    authors:
+      - family-names: Rahimi
+        given-names: Farnaz
+      - family-names: Sirocchi
+        given-names: Christel
+      - family-names: Matschinske
+        given-names: Julian
+      - family-names: Metzler
+        given-names: Markus
+      - family-names: Zierk
+        given-names: Jakob
+      - family-names: Blumenthal
+        given-names: David B.
+    year: 2025
+    doi: "10.64898/2025.12.12.25342142"
+  - type: conference-paper
+    title: "PrimeNet: Pre-training for Irregular Multivariate Time Series"
+    authors:
+      - family-names: Chowdhury
+        given-names: Ranak Roy
+      - family-names: Zhang
+        given-names: Xiyuan
+      - family-names: Shang
+        given-names: Jingbo
+      - family-names: Gupta
+        given-names: Rajesh K.
+      - family-names: Hong
+        given-names: Dezhi
+    year: 2023
+    doi: "10.1609/aaai.v37i6.25876"
